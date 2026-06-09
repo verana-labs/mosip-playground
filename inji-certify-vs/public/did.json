@@ -1,0 +1,28 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1"
+  ],
+  "id": "did:web:inji-certify-vs.mosip.testnet.verana.network",
+  "verificationMethod": [
+    {
+      "id": "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:inji-certify-vs.mosip.testnet.verana.network",
+      "publicKeyMultibase": "z6Mkqm2Pb5VYe76Z8WJpVmMUA7oKZBD5uJsqwT4KwTuDKe6P"
+    }
+  ],
+  "authentication": [
+    "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1"
+  ],
+  "assertionMethod": [
+    "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1"
+  ],
+  "service": [
+    {
+      "id": "did:web:inji-certify-vs.mosip.testnet.verana.network#vpr-schemas-service-c-vp",
+      "type": "LinkedVerifiablePresentation",
+      "serviceEndpoint": "https://inji-certify-vs.mosip.testnet.verana.network/vt/schemas-service-c-vp.json"
+    }
+  ]
+}

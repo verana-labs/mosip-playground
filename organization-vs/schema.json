@@ -1,31 +1,42 @@
 {
-  "$id": "https://verana-labs.github.io/verifiable-trust-spec/schemas/v4/example.json",
+  "$id": "https://verana-labs.github.io/verifiable-trust-spec/schemas/v4/foundational-resident-id.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Example Credential",
-  "description": "An example credential schema for demonstrating Verana Trust Registry capabilities.",
+  "title": "Foundational Resident ID Credential",
+  "description": "A foundational resident identity credential issued under the MOSIP Pilot Authority trust ecosystem on the Verana Trust Network.",
   "type": "object",
   "properties": {
     "credentialSubject": {
       "type": "object",
       "properties": {
-        "firstName": {
+        "fullName": {
           "type": "string",
-          "description": "The first name of the subject"
+          "minLength": 1,
+          "maxLength": 256
         },
-        "lastName": {
+        "dateOfBirth": {
           "type": "string",
-          "description": "The last name of the subject"
+          "format": "date"
         },
-        "countryOfResidence": {
+        "gender": {
           "type": "string",
-          "description": "The country of residence (ISO 3166-1 alpha-2)"
+          "enum": ["male", "female", "other", "unspecified"]
+        },
+        "nationality": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "residentAddress": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
         }
       },
-      "required": [
-        "firstName",
-        "lastName",
-        "countryOfResidence"
-      ]
+      "required": ["fullName", "dateOfBirth", "identifier"]
     }
   }
 }

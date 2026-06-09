@@ -65,6 +65,7 @@ jobs:
           CHART_SOURCE=$(yq '.chartSource' /tmp/deployment-resolved.yaml)
           CHART_VERSION=$(yq '.chartVersion' /tmp/deployment-resolved.yaml)
           CHART_NAMESPACE="${{ secrets.K8S_NAMESPACE }}"
+          CHART_NAMESPACE="${CHART_NAMESPACE:-mosip}"
           RELEASE_NAME=$(yq '.name' /tmp/deployment-resolved.yaml)
           INGRESS_HOST=$(yq '.ingress.host' /tmp/deployment-resolved.yaml)
           echo "CHART_SOURCE=${CHART_SOURCE}" >> "$GITHUB_ENV"
