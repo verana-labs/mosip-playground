@@ -87,7 +87,8 @@ spec:
             - { name: INJI_VERIFY_RESPONSE_CODE_EXPIRY_TIME_IN_MINS, value: "5" }
             - { name: INJI_VERIFY_CLAIMS_WITH_META_DATA, value: "_sd,_sd_alg,iss,cnf,sub,aud,exp,nbf,iat,cti" }
           readinessProbe:
-            httpGet: { path: /actuator/health, port: 8080 }
+            # verify-service runs under context path /v1/verify
+            httpGet: { path: /v1/verify/actuator/health, port: 8080 }
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 30
