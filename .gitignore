@@ -6,3 +6,4 @@ data/
 
 # Generated IDs
 */ids.env
+.DS_Store
