@@ -95,10 +95,22 @@ Resolver API: `GET /v1/trust/resolve?did=&detail=full` (Q1), `GET /v1/trust/issu
 
 ## Deployment status
 
-> **Pending first K8s deploy.** Blocked only on GitHub Actions being enabled on the repo (Settings →
-> Actions). Branch `vs/testnet-mosip` is ready. This section gets the live DIDs / TR id / schema id /
-> permission ids once workflow #1 runs. (Reference: on the throwaway VPS the equivalent was org
-> `TRUSTED` with TR 166 / schema 240, and the Inji issuer `TRUSTED` + `authorized` with ISSUER perm 743.)
+**Org (Milestone A′): DEPLOYED + TRUSTED on testnet (2026-06-09)** — via workflow #1 from
+`vs/testnet-mosip` to the Verana K8s (namespace `mosip`, Helm `vs-agent-chart v1.9.1`, valid TLS):
+
+- **DID:** `did:webvh:QmUNEzd1z2TktGLNhQKYuhNp6ckq4xzetHD5oVdH2YD3PA:organization-vs.mosip.testnet.verana.network`
+- **Host:** `https://organization-vs.mosip.testnet.verana.network`
+- **Trust Registry `167`**, **schema `241`** (Foundational Resident ID), root permission `745`
+- **Q1 → TRUSTED** (2 VerifiableTrustCredentials: ECS-ORG from the Verana ECS TR + self-issued ECS-SERVICE)
+- On-chain controller: `verana1dz8zaec3q25xc4rwfu3s02wa53z5d2qcauktzd` — set as the `VS_DEMO_MNEMONIC`
+  repo secret; a throwaway funded testnet account, seed **not** committed.
+
+The namespace defaults to `mosip` in the workflow (`CHART_NAMESPACE:-mosip`), so no `K8S_NAMESPACE`
+secret is required. The only secret needed for the org deploy is `VS_DEMO_MNEMONIC` (plus the org-level
+`OVH_KUBECONFIG` scoped to this repo).
+
+**Inji issuer (Milestone B′): not yet on K8s.** Proven end-to-end on a throwaway VPS (TRUSTED + authorized,
+config-only binding); deploying the Inji Certify stack + its `did:web` to the cluster is the next build.
 
 ## Known follow-up (not a Phase-0 blocker)
 
