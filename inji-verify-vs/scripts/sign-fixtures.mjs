@@ -121,7 +121,7 @@ function residentIdCredential({ issuer, schemaId, serial }) {
       "https://www.w3.org/ns/credentials/examples/v2",
       "https://w3id.org/security/suites/ed25519-2020/v1",
     ],
-    id: `urn:uuid:phase1-demo-${serial}`,
+    id: `https://inji-certify-vs.mosip.testnet.verana.network/credentials/${UUIDS[serial]}`,
     type: ["VerifiableCredential", "VerifiableTrustCredential"],
     issuer,
     issuanceDate: issued.toISOString(),
@@ -155,6 +155,12 @@ async function verify(signed) {
     documentLoader,
   });
 }
+
+const UUIDS = {
+  "0001": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "0002": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+  "0003": "c3d4e5f6-a7b8-4c9d-8e0f-2a3b4c5d6e7f",
+};
 
 const issuerKey = await issuerKeyPair();
 

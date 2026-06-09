@@ -4,14 +4,14 @@
     "https://www.w3.org/ns/credentials/examples/v2",
     "https://w3id.org/security/suites/ed25519-2020/v1"
   ],
-  "id": "urn:uuid:phase1-demo-0001",
+  "id": "https://inji-certify-vs.mosip.testnet.verana.network/credentials/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
   "type": [
     "VerifiableCredential",
     "VerifiableTrustCredential"
   ],
   "issuer": "did:web:inji-certify-vs.mosip.testnet.verana.network",
-  "issuanceDate": "2026-06-09T20:23:50.552Z",
-  "expirationDate": "2031-06-08T20:23:50.552Z",
+  "issuanceDate": "2026-06-09T22:23:59.196Z",
+  "expirationDate": "2031-06-08T22:23:59.196Z",
   "credentialSubject": {
     "fullName": "Someone Else Entirely",
     "dateOfBirth": "1992-03-14",
@@ -26,9 +26,9 @@
   },
   "proof": {
     "type": "Ed25519Signature2020",
-    "created": "2026-06-09T20:23:50Z",
+    "created": "2026-06-09T22:23:59Z",
     "verificationMethod": "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1",
     "proofPurpose": "assertionMethod",
-    "proofValue": "z33bFL6egTNTYJMgUU2rLK9edAyCPsWgB7j81MwfS81T1f17a47my3cosGowgKCXrUrqoHyMWn2NKyiMTNymSEjM4"
+    "proofValue": "zi6dz1pvjjp5MTqfCQcU4wE1ythaHbFrYkr9KgydPXgm1vi7V7Mzb1e9BUi2UBP31bja4FwHzcD7Ttte2CoupMMM"
   }
 }

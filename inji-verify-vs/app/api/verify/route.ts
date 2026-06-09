@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
+import { verifyWithMosip } from "@/lib/mosip/verify-service";
 import { resolveIssuerAuthorization, resolveTrust } from "@/lib/verana/resolver";
 import { buildTrustReport } from "@/lib/verana/verdict";
 import { extractTrustInputs } from "@/lib/vc/extract";
 import { assertReasonableShape } from "@/lib/vc/structural-guard";
-import { verifyCredentialSignature } from "@/lib/vc/verify-signature";
 
 export const runtime = "nodejs";
 
@@ -15,13 +15,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "credential too large" }, { status: 413 });
   }
 
+  let raw: string;
   let credential: Record<string, unknown>;
   try {
-    const text = await request.text();
-    if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) {
+    raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
       return NextResponse.json({ error: "credential too large" }, { status: 413 });
     }
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("not a JSON object");
     }
@@ -44,24 +45,39 @@ export async function POST(request: Request) {
   }
 
   const { issuerDid, schemaId } = extractTrustInputs(credential);
-  const signature = await verifyCredentialSignature(credential);
 
-  if (!signature.valid) {
+  // 1. MOSIP Inji Verify (real verify-service): signature + schema + expiry.
+  const mosip = await verifyWithMosip(raw);
+  if (!mosip.reachable) {
+    return NextResponse.json({
+      verdict: "VERIFY_SERVICE_UNAVAILABLE",
+      signatureValid: false,
+      resolverError: mosip.error,
+      issuerDid,
+      schemaId,
+    });
+  }
+
+  if (!mosip.signatureValid) {
     return NextResponse.json(
       buildTrustReport({
         signatureValid: false,
-        signatureError: signature.error,
+        signatureError: mosip.signatureError ?? mosip.error,
+        expiryValid: mosip.expiryValid,
+        claims: mosip.claims,
         issuerDid,
         schemaId,
       })
     );
   }
 
+  // 2. Verana Trust Network: is the (now cryptographically valid) issuer accredited?
   if (!issuerDid) {
     return NextResponse.json(
       buildTrustReport({
         signatureValid: true,
-        signatureError: undefined,
+        expiryValid: mosip.expiryValid,
+        claims: mosip.claims,
         issuerDid: undefined,
         schemaId,
         q1: { ok: false, error: "credential has no resolvable issuer DID" },
@@ -74,5 +90,15 @@ export async function POST(request: Request) {
     schemaId ? resolveIssuerAuthorization(issuerDid, schemaId) : Promise.resolve(undefined),
   ]);
 
-  return NextResponse.json(buildTrustReport({ signatureValid: true, issuerDid, schemaId, q1, q2 }));
+  return NextResponse.json(
+    buildTrustReport({
+      signatureValid: true,
+      expiryValid: mosip.expiryValid,
+      claims: mosip.claims,
+      issuerDid,
+      schemaId,
+      q1,
+      q2,
+    })
+  );
 }

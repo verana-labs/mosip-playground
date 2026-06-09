@@ -10,6 +10,7 @@ import {
   Landmark,
   Loader2,
   Network,
+  ServerCrash,
   ShieldCheck,
   ShieldQuestion,
   ShieldX,
@@ -32,48 +33,56 @@ const VERDICTS: Record<
     tone: "border-emerald-500/50 bg-emerald-500/10 text-emerald-300",
     icon: ShieldCheck,
     explain:
-      "The signature is valid AND the issuer is a Trusted Verifiable Service holding an active ISSUER permission for this credential type on the Verana Trust Network.",
+      "MOSIP Inji Verify confirmed the credential is authentic, AND the Verana Trust Network confirms the issuer is a Trusted Verifiable Service with an active ISSUER accreditation for this credential type.",
   },
   TRUSTED_NOT_AUTHORIZED: {
-    title: "Trusted service — NOT authorized for this credential type",
+    title: "Trusted service — NOT accredited for this credential type",
     tone: "border-amber-500/50 bg-amber-500/10 text-amber-300",
     icon: CircleAlert,
     explain:
-      "The issuer is a Trusted Verifiable Service, but it holds no ISSUER permission for the schema this credential references. It is issuing outside its accreditation.",
+      "The credential is authentic and the issuer is a Trusted Verifiable Service, but it holds no ISSUER accreditation for this credential's schema. It is issuing outside its accreditation.",
   },
   TRUSTED_NO_SCHEMA: {
     title: "Trusted service — credential type not verifiable",
     tone: "border-amber-500/50 bg-amber-500/10 text-amber-300",
     icon: ShieldQuestion,
     explain:
-      "The issuer is trusted, but the credential carries no credentialSchema reference, so its authorization for this credential type cannot be checked.",
+      "The credential is authentic and the issuer is trusted, but it carries no credentialSchema reference, so its accreditation for this credential type cannot be checked.",
   },
   PARTIAL_TRUST: {
     title: "Partial trust",
     tone: "border-yellow-500/50 bg-yellow-500/10 text-yellow-300",
     icon: ShieldQuestion,
     explain:
-      "The issuer DID resolves on the Verana Trust Network but its trust chain is incomplete (PARTIAL). Treat with caution.",
+      "The credential is authentic, but the issuer's Verana trust chain is incomplete (PARTIAL). Treat with caution.",
   },
   UNTRUSTED: {
-    title: "Untrusted issuer",
+    title: "Authentic, but untrusted issuer",
     tone: "border-red-500/50 bg-red-500/10 text-red-300",
     icon: ShieldX,
     explain:
-      "The cryptographic signature is VALID — but the issuer is not a trusted participant of the Verana Trust Network. A valid signature alone proves authenticity, not legitimacy.",
+      "MOSIP Inji Verify confirmed the signature is valid — but the issuer is not a trusted participant of the Verana Trust Network. A valid signature proves authenticity, not legitimacy.",
   },
   INVALID_CREDENTIAL: {
     title: "Invalid credential",
     tone: "border-red-500/50 bg-red-500/10 text-red-300",
     icon: Ban,
-    explain: "The credential failed cryptographic verification. Its content cannot be trusted at all.",
+    explain:
+      "MOSIP Inji Verify rejected the credential — its signature, schema, or validity failed. Its content cannot be trusted at all.",
   },
   RESOLVER_UNAVAILABLE: {
     title: "Trust resolution unavailable",
     tone: "border-slate-500/50 bg-slate-500/10 text-slate-300",
     icon: CloudOff,
     explain:
-      "The signature was checked, but the Verana Trust Resolver could not be reached. No trust verdict can be given — do not treat this credential as trusted.",
+      "The credential was verified by MOSIP Inji Verify, but the Verana Trust Resolver could not be reached. No trust verdict can be given — do not treat this issuer as accredited.",
+  },
+  VERIFY_SERVICE_UNAVAILABLE: {
+    title: "Verification service unavailable",
+    tone: "border-slate-500/50 bg-slate-500/10 text-slate-300",
+    icon: ServerCrash,
+    explain:
+      "The MOSIP Inji Verify service could not be reached, so the credential could not be verified at all. No verdict can be given.",
   },
 };
 
@@ -140,6 +149,7 @@ export default function Home() {
 
   const verdict = report ? VERDICTS[report.verdict] : null;
   const VerdictIcon = verdict?.icon ?? ShieldQuestion;
+  const trustChecked = report?.signatureValid && report.verdict !== "VERIFY_SERVICE_UNAVAILABLE";
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -154,10 +164,11 @@ export default function Home() {
           </span>
         </div>
         <p className="max-w-3xl text-sm text-slate-400">
-          Paste a verifiable credential. The portal verifies its signature, then asks the Verana Trust
-          Resolver two questions: <em>is the issuer a Trusted Verifiable Service?</em> and{" "}
-          <em>is it an authorized issuer of this credential type?</em> — turning &ldquo;the signature is
-          valid&rdquo; into &ldquo;the issuer is accredited.&rdquo;
+          Paste a verifiable credential. <strong className="text-slate-300">MOSIP Inji Verify</strong>{" "}
+          verifies its signature, schema and validity, then the{" "}
+          <strong className="text-slate-300">Verana Trust Network</strong> answers <em>is the issuer a
+          Trusted Verifiable Service?</em> and <em>is it an accredited issuer of this credential type?</em>{" "}
+          — turning &ldquo;the signature is valid&rdquo; into &ldquo;the issuer is accredited.&rdquo;
         </p>
       </header>
 
@@ -220,33 +231,55 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Chip ok={report.signatureValid} label={report.signatureValid ? "Signature valid" : "Signature invalid"} />
-                {report.trustStatus && (
-                  <Chip ok={report.trustStatus === "TRUSTED"} label={`Trust: ${report.trustStatus}`} />
-                )}
-                {report.authorized !== undefined && (
-                  <Chip ok={report.authorized} label={report.authorized ? "Authorized issuer" : "Not authorized"} />
-                )}
-                {report.production !== undefined && (
-                  <Chip ok={report.production} label={report.production ? "Production DID" : "Non-production DID"} />
-                )}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="mb-3 flex items-center gap-2 text-slate-300">
+                  <BadgeCheck className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-sm font-semibold">Verified by MOSIP Inji Verify</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Chip ok={report.signatureValid} label={report.signatureValid ? "Signature valid" : "Signature invalid"} />
+                  {report.expiryValid !== undefined && (
+                    <Chip ok={report.expiryValid} label={report.expiryValid ? "Not expired" : "Expired"} />
+                  )}
+                </div>
               </div>
 
-              {report.identity?.organizationName && (
+              {trustChecked && (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
                   <div className="mb-3 flex items-center gap-2 text-slate-300">
-                    <Landmark className="h-4 w-4 text-emerald-400" />
-                    <h3 className="text-sm font-semibold">Accountable organization</h3>
+                    <Network className="h-4 w-4 text-emerald-400" />
+                    <h3 className="text-sm font-semibold">Verana Trust Network</h3>
                   </div>
-                  <div className="space-y-2 text-sm">
-                    <Row label="Organization" value={report.identity.organizationName} mono={false} />
-                    <Row label="Country" value={report.identity.countryCode} mono={false} />
-                    <Row label="Registry ID" value={report.identity.registryId} />
-                    <Row label="Address" value={report.identity.address} mono={false} />
-                    <Row label="Service" value={report.identity.serviceName} mono={false} />
-                    <Row label="Ecosystem" value={report.identity.ecosystemDid} />
+                  <div className="flex flex-wrap gap-2">
+                    {report.trustStatus ? (
+                      <Chip ok={report.trustStatus === "TRUSTED"} label={`Trust: ${report.trustStatus}`} />
+                    ) : (
+                      <Chip ok={false} label="Not on Verana" />
+                    )}
+                    {report.authorized !== undefined && (
+                      <Chip ok={report.authorized} label={report.authorized ? "Accredited issuer" : "Not accredited"} />
+                    )}
+                    {report.production !== undefined && (
+                      <Chip ok={report.production} label={report.production ? "Production DID" : "Non-production DID"} />
+                    )}
                   </div>
+
+                  {report.identity?.organizationName && (
+                    <div className="mt-4 border-t border-slate-800 pt-4">
+                      <div className="mb-3 flex items-center gap-2 text-slate-400">
+                        <Landmark className="h-4 w-4 text-emerald-400" />
+                        <span className="text-xs font-semibold uppercase tracking-wide">Accountable organization</span>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <Row label="Organization" value={report.identity.organizationName} mono={false} />
+                        <Row label="Country" value={report.identity.countryCode} mono={false} />
+                        <Row label="Registry ID" value={report.identity.registryId} />
+                        <Row label="Address" value={report.identity.address} mono={false} />
+                        <Row label="Service" value={report.identity.serviceName} mono={false} />
+                        <Row label="Ecosystem" value={report.identity.ecosystemDid} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -268,7 +301,8 @@ export default function Home() {
       </div>
 
       <footer className="mt-10 border-t border-slate-900 pt-4 text-xs text-slate-600">
-        Verana Trust Resolver: resolver.testnet.verana.network · Issuer onboarded in Phase 0:
+        Verification: MOSIP Inji Verify verify-service · Trust: Verana Trust Resolver
+        (resolver.testnet.verana.network) · Issuer onboarded in Phase 0:
         did:web:inji-certify-vs.mosip.testnet.verana.network
       </footer>
     </main>

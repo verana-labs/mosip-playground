@@ -6,46 +6,54 @@ first; the issuer, schema and VTJSC referenced everywhere here were created ther
 
 ## TL;DR
 
-Phase 1 turns "the signature is valid" into "the issuer is accredited". The **`inji-verify-vs/`**
-service is a standalone trust-check portal (Next.js): paste/upload a credential → it verifies the
-Ed25519Signature2020 proof → extracts `issuer` + `credentialSchema.id` → asks the Verana Trust
-Resolver **Q1** (is the issuer a Trusted Verifiable Service?) and **Q2** (is it an authorized
-ISSUER of this schema?) → renders one combined verdict with the issuer's real-world identity
-("Issued by **MOSIP Pilot Authority**, IN — accredited issuer of Foundational Resident ID").
+Phase 1 turns "the signature is valid" into "the issuer is accredited" — as an **additive layer on
+the real MOSIP Inji Verify**, recreating none of its verification. The **`inji-verify-vs/`** portal
+(Next.js) delegates verification to MOSIP's official **`verify-service`** (image
+`injistack/inji-verify-service:0.18.1`, the same code Inji Verify ships) and then adds the Verana
+trust check on top:
 
-Per the Phase-1 spec, all three validation paths work, plus the failure modes:
+1. POST the credential to `verify-service` `/v1/verify/v2/vc-verification` → real MOSIP
+   signature + schema + expiry verification.
+2. If valid, extract `issuer` + `credentialSchema.id` and ask the Verana Trust Resolver **Q1** (is
+   the issuer a Trusted Verifiable Service?) and **Q2** (is it an accredited ISSUER of this schema?).
+3. Render one combined verdict with the issuer's real-world identity ("Issued by **MOSIP Pilot
+   Authority**, IN — accredited issuer of Foundational Resident ID").
 
-| Credential | Signature | Verdict |
-|---|---|---|
-| issued by the Phase-0 Inji issuer, resident-id VTJSC | valid | `TRUSTED_AUTHORIZED` + org identity |
-| self-signed by an unregistered `did:key` | **valid** | `UNTRUSTED` — the headline behavior: cryptographic validity ≠ trust |
-| from the Phase-0 issuer but a schema it has no permission for | valid | `TRUSTED_NOT_AUTHORIZED` |
-| tampered after signing | invalid | `INVALID_CREDENTIAL` (trust is never evaluated) |
-| no `credentialSchema` reference | valid | `TRUSTED_NO_SCHEMA` (Q2 impossible, said explicitly) |
-| resolver unreachable | valid | `RESOLVER_UNAVAILABLE` (fails closed, never silently trusted) |
+This was an explicit **pivot** (2026-06-10): an earlier build did its own `@digitalbazaar`
+verification, but that reconstruction diverged from MOSIP's real verifier. We confirmed the Phase-0
+credential verifies cleanly in the real `verify-service`, so Phase 1 now integrates with the official
+suite and only owns the trust layer.
+
+| Credential | MOSIP verify-service | Verana | Verdict |
+|---|---|---|---|
+| Phase-0 issuer, resident-id VTJSC | sig+expiry valid | TRUSTED + accredited | `TRUSTED_AUTHORIZED` + org identity |
+| self-signed `did:key` | **valid** | not on network | `UNTRUSTED` — authentic ≠ accredited |
+| Phase-0 issuer, schema it has no permission for | valid | trusted, not accredited | `TRUSTED_NOT_AUTHORIZED` |
+| tampered after signing | **invalid** (`ERR_SIGNATURE_VERIFICATION_FAILED`) | — | `INVALID_CREDENTIAL` |
+| no `credentialSchema` reference | valid | trusted | `TRUSTED_NO_SCHEMA` |
+| resolver unreachable | valid | — | `RESOLVER_UNAVAILABLE` (fails closed) |
+| verify-service unreachable | — | — | `VERIFY_SERVICE_UNAVAILABLE` (fails closed) |
 
 ## What this is (and is not)
 
-This is the **functional Phase-1 layer**: the verifier-side trust check, equivalent to what would be
-injected into `mosip/vc-verifier` / `mosip/inji-verify` upstream. It is deliberately a single-purpose
-tool — paste credential, get verdict. The guided end-to-end showcase UI is a separate thing
-(issue #2, the future `playground.mosip.testnet.verana.network`) and should consume/link this
-portal rather than duplicate it.
+This is the **additive Phase-1 trust layer** over the real MOSIP verifier — exactly the "additional
+layer to existing verifier systems" the spec describes. The portal owns only orchestration +
+trust + UI; **all credential verification is MOSIP's** (`verify-service`, deployed unmodified). The
+guided end-to-end showcase UI is a separate thing (issue #2) and should consume this portal.
 
-`lib/verana/` (resolver client + verdict mapping) is the portable core: pure logic, no Next.js
-imports, unit-tested — this is the module to port into `vc-verifier` (Kotlin) for an upstream
-contribution.
+`lib/verana/` (resolver client + verdict mapping) is the portable trust core: pure logic, no Next.js
+imports, unit-tested — the module to port into `vc-verifier` for an upstream contribution.
 
 ## Architecture
 
 ```
 POST /api/verify  { ...arbitrary VC JSON... }
   │
-  ├─ 1. signature  lib/vc/verify-signature.ts   @digitalbazaar/vc + Ed25519Signature2020
-  │                lib/vc/document-loader.ts    static JSON-LD contexts + did:web fetch + did:key synth
-  ├─ 2. extract    lib/vc/extract.ts            issuer DID + credentialSchema.id (VTJSC URL)
-  ├─ 3. resolve    lib/verana/resolver.ts       Q1 /v1/trust/resolve?detail=full · Q2 /v1/trust/issuer-authorization
-  └─ 4. verdict    lib/verana/verdict.ts        single Verdict + IssuerIdentity (org name, country, registry id, ecosystem)
+  ├─ 1. verify   lib/mosip/verify-service.ts   → POST verify-service /v1/verify/v2/vc-verification
+  │              (real MOSIP: signature + schema + expiry; injistack/inji-verify-service:0.18.1)
+  ├─ 2. extract  lib/vc/extract.ts             issuer DID + credentialSchema.id (VTJSC URL)
+  ├─ 3. resolve  lib/verana/resolver.ts        Q1 /v1/trust/resolve?detail=full · Q2 /v1/trust/issuer-authorization
+  └─ 4. verdict  lib/verana/verdict.ts         single Verdict + IssuerIdentity (org name, country, registry id, ecosystem)
 ```
 
 Resolver semantics learned by probing (handle all three!):
@@ -55,40 +63,40 @@ Resolver semantics learned by probing (handle all three!):
   the UI comes from the ECS-ORG entry (`claims.name/countryCode/registryId`), the service name from
   the ECS-SERVICE entry whose `id` equals the resolved DID. Only `result: "VALID"` entries are used.
 
-## Non-obvious things learned (read before touching the verifier)
+## Non-obvious things learned (read before touching this)
 
-1. **`#fragment` documentLoader framing.** `@digitalbazaar/ed25519-signature-2020` ≥5.4 resolves the
-   verification method through `ed25519-multikey`, which asserts the key sub-document carries its own
-   suite `@context`. Returning the whole DID document for `did:…#key-1` (as the Phase-0 signing
-   script did — it only signed, never verified) fails with `"key" must be a Multikey…`. The loader
-   must return the matching `verificationMethod` entry wrapped in the `ed25519-2020/v1` context.
-2. **JSON-LD contexts are pinned, not fetched.** The four contexts (credentials/v1, examples/v2,
-   ed25519-2020/v1, did/v1) are bundled in `lib/vc/contexts/`; any other remote document except
-   `did:web`/`did:key` resolution is refused. Remote `@context` substitution would let an attacker
-   change the meaning of signed data; a poisoned context now just fails verification.
-3. **Test credentials are config-only to produce.** `scripts/sign-fixtures.mjs` signs exactly what
-   Inji Certify's DataProvider template emits per the Phase-0 binding (ldp_vc, JSON-LD,
-   `credentialSchema: {id: <VTJSC>, type: JsonSchemaCredential}`, type includes
-   `VerifiableTrustCredential`). It needs the issuer key, which is NOT in the repo:
-   `KEY_PATH=~/.verana/mosip/inji-certify-vs-key.json npm run fixtures`.
-4. **did:web SSRF surface.** The issuer field of an arbitrary credential drives a did:web fetch —
-   the main attack surface on this public, unauthenticated endpoint. See the Security section below.
+1. **Verification is MOSIP's, not ours.** The portal does NOT verify signatures — it POSTs the raw VC
+   to `verify-service` `/v1/verify/v2/vc-verification` (`{verifiableCredential: <string>,
+   skipStatusChecks, includeClaims}`) and reads `{allChecksSuccessful, schemaAndSignatureCheck,
+   expiryCheck, claims}`. The standalone `io.mosip:vcverifier-jar:1.2.0` Maven lib behaves
+   differently (stricter id rule, did:web `/did.json` not `.well-known`, Ed25519 canonicalization) —
+   do NOT use the library as a proxy for the service; test against the real `verify-service`.
+2. **Phase-0 credentials verify cleanly in the real service.** The committed fixtures (did:web issuer,
+   `@digitalbazaar` Ed25519Signature2020, `urn:uuid` or https id) all pass `verify-service`; tampering
+   yields `ERR_SIGNATURE_VERIFICATION_FAILED`. No Phase-0 issuer changes were needed.
+3. **Test credentials are config-only to produce.** `scripts/sign-fixtures.mjs` signs what Inji
+   Certify's DataProvider template emits (ldp_vc, `credentialSchema: {id: <VTJSC>, type:
+   JsonSchemaCredential}`, type includes `VerifiableTrustCredential`). Needs the issuer key, NOT in
+   the repo: `KEY_PATH=~/.verana/mosip/inji-certify-vs-key.json npm run fixtures`. (These are dev-only;
+   the runtime no longer depends on `@digitalbazaar`.)
+4. **Fail-closed both ways.** verify-service unreachable → `VERIFY_SERVICE_UNAVAILABLE`; resolver
+   unreachable/malformed → `RESOLVER_UNAVAILABLE`. Neither ever becomes a trusted verdict.
 
 ## Runbook
 
 ```bash
-# local
-cd inji-verify-vs && npm install
-npm test                      # 18 unit tests (verdict matrix + extraction)
-npm run fixtures              # regenerate public/fixtures (needs KEY_PATH, see above)
-npm run dev                   # http://localhost:3000
+# local — run the real MOSIP stack, then the portal against it
+cd inji-verify-official/docker-compose && docker compose up -d   # verify-service :8080, ui, postgres
+cd inji-verify-vs && npm install && npm test                     # 36 unit tests
+VERIFY_SERVICE_URL=http://localhost:8080 npm run dev             # portal at http://localhost:3000
 
-# deploy (workflow #8 — push-triggered on vs/testnet-mosip for inji-verify-vs/**, or manual)
+# deploy — verify-service first (workflow #9), then the portal (workflow #8)
+gh workflow run 9_deploy-verify-service.yml -R verana-labs/mosip-playground --ref vs/testnet-mosip
 gh workflow run 8_deploy-inji-verify-vs.yml -R verana-labs/mosip-playground --ref vs/testnet-mosip
-# → builds veranalabs/inji-verify image → deploys to namespace mosip
-# → https://inji-verify.mosip.testnet.verana.network
+# → verify-service (injistack/inji-verify-service:0.18.1) + postgres in-cluster at verify-service:8080
+# → portal at https://inji-verify.mosip.testnet.verana.network (VERIFY_SERVICE_URL wired to it)
 
-# validate live (the three spec paths)
+# validate live
 BASE=https://inji-verify.mosip.testnet.verana.network
 for f in valid-resident-id self-signed wrong-schema tampered; do
   curl -s -X POST "$BASE/api/verify" -H 'content-type: application/json' \
@@ -96,47 +104,38 @@ for f in valid-resident-id self-signed wrong-schema tampered; do
 done
 ```
 
-Config (env): `VERANA_RESOLVER_URL` (default `https://resolver.testnet.verana.network`),
-`VERANA_RESOLVER_TIMEOUT_MS` (10000), `VERANA_RESOLVER_CACHE_TTL_MS` (300000 — resolver itself
-caches ~1h against block height; `POST /v1/trust/refresh {did}` busts it after on-chain changes).
+Config (env): `VERIFY_SERVICE_URL` (default `http://localhost:8080`, set to `http://verify-service:8080`
+in-cluster), `VERANA_RESOLVER_URL` (default `https://resolver.testnet.verana.network`),
+`VERANA_RESOLVER_TIMEOUT_MS` (10000), `VERANA_RESOLVER_CACHE_TTL_MS` (300000).
 
 ## Security
 
-The portal accepts arbitrary, unauthenticated credential JSON, so it was reviewed by an independent
-code review (Codex + CodeRabbit) and a security audit before deploy. What that hardened:
+The portal accepts arbitrary, unauthenticated credential JSON. After the pivot, the portal no longer
+fetches anything attacker-controlled (no more `did:web` resolution in our code — `verify-service`
+does that internally, inside the cluster), so the earlier SSRF surface is gone with the deleted
+`lib/vc/document-loader.ts`. What remains hardened (from the earlier code review + security audit):
 
 - **Fail-closed trust decisions.** The resolver response is runtime-validated
   (`lib/verana/validate.ts`): `trustStatus` must be an exact enum value, `authorized` a real boolean,
   and the echoed `did`/`vtjscId` must match the request — otherwise the verdict becomes
   `RESOLVER_UNAVAILABLE`, never trusted. `buildTrustReport` requires `trustStatus === "TRUSTED"` to
-  even reach the authorization gate; everything else is non-trusted. A malformed or spoofed resolver
-  payload can no longer mint `TRUSTED_AUTHORIZED`. (This is the bug that mattered most — it would have
-  travelled into `vc-verifier` with `lib/verana/`.)
-- **SSRF defense in depth** (`lib/vc/document-loader.ts`): https-only, `redirect: "error"`, port must
-  be 443, single-label and numeric/hex/octal host literals refused, path-traversal segments rejected,
-  and the host is DNS-resolved with every address checked against loopback/private/link-local/CGNAT/
-  reserved ranges (this blocks `127.0.0.1`, `169.254.169.254`, `*.svc` cluster names, decimal-IP
-  forms, etc. — all verified by `tests/document-loader.test.ts` and live probes). Backed at the
-  network layer by a **NetworkPolicy** (workflow #8) restricting egress to TCP/443 to public IPs plus
-  DNS — the decisive control, provided the cluster CNI enforces NetworkPolicy.
+  reach the authorization gate; everything else is non-trusted. A malformed/spoofed resolver payload
+  cannot mint `TRUSTED_AUTHORIZED`. This is the bug that mattered most and it travels with `lib/verana/`.
+- **Fail-closed on both backends.** verify-service unreachable → `VERIFY_SERVICE_UNAVAILABLE`; resolver
+  unreachable → `RESOLVER_UNAVAILABLE`. A valid signature with no reachable trust check is never trusted.
 - **DoS limits:** 128KB body cap (byte-accurate + ingress `proxy-body-size`), a structural pre-check
-  capping JSON depth/node-count/proof-count before the unbounded JSON-LD canonicalization
-  (`lib/vc/structural-guard.ts`), capped+streamed response reads (`lib/safe-fetch.ts`), and bounded
-  LRU+TTL caches with in-flight coalescing (`lib/bounded-cache.ts`) so attacker-keyed DIDs can't grow
-  memory without bound.
-- **did:key** values are multicodec-validated (Ed25519 `0xed01` + 32 bytes), not just prefix-matched.
+  capping JSON depth/node-count/proof-count (`lib/vc/structural-guard.ts`), capped response reads
+  (`lib/safe-fetch.ts`), and bounded LRU+TTL resolver cache with in-flight coalescing
+  (`lib/bounded-cache.ts`).
+- **NetworkPolicy egress** (workflow #8): portal egress restricted to DNS + the in-cluster
+  `verify-service:8080` + public HTTPS (the Verana resolver); cluster-internal/metadata IPs otherwise
+  blocked. `verify-service` itself is internal ClusterIP only (no public ingress).
 
 Known limitations, acceptable for the testnet pilot, documented for production:
-- **No schema-conformance check.** Authorization verifies the issuer is permitted for the schema the
-  credential *names*; it does not fetch the VTJSC and validate the claims *against* it. A legitimately
-  trusted issuer could sign off-schema claims and still pass. (Not reachable by an external attacker.)
-- **DNS rebinding** is not fully closed (validate-then-fetch has no IP pinning); the NetworkPolicy
-  egress restriction is the mitigation. Revisit with connection-level IP pinning for production.
-- **CPU-bound canonicalization** isn't isolated in a killable worker; the structural pre-check + body
-  cap + rate limiting at ingress are the pilot mitigations.
-- Crypto/trust-bypass via the credential is closed by `@digitalbazaar/vc` defaults
-  (`CredentialIssuancePurpose` binds `issuer` to the verification-method controller; expiry enforced).
-  Revocation (`credentialStatus`) is not checked in the demo and fails closed.
+- **No schema-conformance check.** Authorization verifies the issuer is accredited for the schema the
+  credential *names*; it does not fetch the VTJSC and validate the claims *against* it.
+- **verify-service is unmodified MOSIP** (`injistack/inji-verify-service:0.18.1`) with an ephemeral
+  postgres; revocation (`credentialStatus`) checks are skipped in the demo (`skipStatusChecks: true`).
 
 ## Deployment status
 

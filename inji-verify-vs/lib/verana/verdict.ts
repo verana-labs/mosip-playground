@@ -9,6 +9,8 @@ import type {
 interface VerdictInput {
   signatureValid: boolean;
   signatureError?: string;
+  expiryValid?: boolean;
+  claims?: Record<string, unknown>;
   issuerDid?: string;
   schemaId?: string;
   q1?: ResolverOutcome<TrustResolution>;
@@ -39,13 +41,28 @@ export function extractIdentity(resolution: TrustResolution): IssuerIdentity {
 }
 
 export function buildTrustReport(input: VerdictInput): TrustReport {
-  const { signatureValid, signatureError, issuerDid, schemaId, q1, q2 } = input;
+  const { signatureValid, signatureError, expiryValid, claims, issuerDid, schemaId, q1, q2 } = input;
 
   if (!signatureValid) {
-    return { verdict: "INVALID_CREDENTIAL", signatureValid: false, signatureError, issuerDid, schemaId };
+    return {
+      verdict: "INVALID_CREDENTIAL",
+      signatureValid: false,
+      signatureError,
+      expiryValid,
+      claims,
+      issuerDid,
+      schemaId,
+    };
   }
 
-  const base: TrustReport = { verdict: "UNTRUSTED", signatureValid: true, issuerDid, schemaId };
+  const base: TrustReport = {
+    verdict: "UNTRUSTED",
+    signatureValid: true,
+    expiryValid,
+    claims,
+    issuerDid,
+    schemaId,
+  };
 
   if (!q1) {
     return { ...base, verdict: "RESOLVER_UNAVAILABLE", resolverError: "trust resolution was not performed" };

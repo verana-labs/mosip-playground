@@ -1,0 +1,51 @@
+name: 9_ Deploy MOSIP verify-service (official Inji Verify backend)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - vs/testnet-mosip
+    paths:
+      - 'verify-service-vs/**'
+      - '.github/workflows/9_deploy-verify-service.yml'
+
+jobs:
+  deploy-verify-service:
+    name: Deploy official MOSIP verify-service + postgres
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy verify-service + postgres
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          echo "Namespace: $NS"
+          kubectl create configmap verify-service-initdb -n "$NS" \
+            --from-file=init.sql=verify-service-vs/init.sql \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -n "$NS" -f verify-service-vs/manifest.yaml
+          kubectl rollout status deployment/postgres-verify -n "$NS" --timeout=180s
+          kubectl rollout status deployment/verify-service -n "$NS" --timeout=420s
+          echo "verify-service available in-cluster at http://verify-service:8080"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## MOSIP verify-service" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** injistack/inji-verify-service:0.18.1 (official, unmodified)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **In-cluster URL:** http://verify-service:8080" >> "$GITHUB_STEP_SUMMARY"

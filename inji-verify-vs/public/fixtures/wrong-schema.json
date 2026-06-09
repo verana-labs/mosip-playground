@@ -4,14 +4,14 @@
     "https://www.w3.org/ns/credentials/examples/v2",
     "https://w3id.org/security/suites/ed25519-2020/v1"
   ],
-  "id": "urn:uuid:phase1-demo-0002",
+  "id": "https://inji-certify-vs.mosip.testnet.verana.network/credentials/b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
   "type": [
     "VerifiableCredential",
     "VerifiableTrustCredential"
   ],
   "issuer": "did:web:inji-certify-vs.mosip.testnet.verana.network",
-  "issuanceDate": "2026-06-09T20:23:50.561Z",
-  "expirationDate": "2031-06-08T20:23:50.561Z",
+  "issuanceDate": "2026-06-09T22:23:59.204Z",
+  "expirationDate": "2031-06-08T22:23:59.204Z",
   "credentialSubject": {
     "fullName": "Asha Devi Sharma",
     "dateOfBirth": "1992-03-14",
@@ -26,9 +26,9 @@
   },
   "proof": {
     "type": "Ed25519Signature2020",
-    "created": "2026-06-09T20:23:50Z",
+    "created": "2026-06-09T22:23:59Z",
     "verificationMethod": "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1",
     "proofPurpose": "assertionMethod",
-    "proofValue": "z5cQMvnPggBfWCYGZqbtUL2Ld9jm8wUrAs3W5vsYGqPwSr5zSeknvHNFgXcXjyhpADhhi9WdtYx3of6Vd2uaQWHtW"
+    "proofValue": "z4dmRb6R44M8D2miKicjYvk7QVMZUqPEu3Y7NxNhzur3huBpKZ954PNw1tiv8KMciGfU7h1Fao5uhcfupnLekBvNj"
   }
 }

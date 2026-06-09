@@ -41,7 +41,8 @@ export type Verdict =
   | "TRUSTED_NO_SCHEMA"
   | "PARTIAL_TRUST"
   | "UNTRUSTED"
-  | "RESOLVER_UNAVAILABLE";
+  | "RESOLVER_UNAVAILABLE"
+  | "VERIFY_SERVICE_UNAVAILABLE";
 
 export interface IssuerIdentity {
   serviceName?: string;
@@ -55,10 +56,15 @@ export interface IssuerIdentity {
 
 export interface TrustReport {
   verdict: Verdict;
+  // MOSIP Inji Verify (real verify-service) results
   signatureValid: boolean;
   signatureError?: string;
+  expiryValid?: boolean;
+  claims?: Record<string, unknown>;
+  // extracted from the credential
   issuerDid?: string;
   schemaId?: string;
+  // Verana Trust Network results
   trustStatus?: TrustStatus;
   authorized?: boolean;
   identity?: IssuerIdentity;
