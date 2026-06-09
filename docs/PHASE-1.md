@@ -140,7 +140,17 @@ Known limitations, acceptable for the testnet pilot, documented for production:
 
 ## Deployment status
 
-_To be updated at deploy time — see workflow #8 run + live validation results in the PR._
+**DEPLOYED + all spec paths validated live on testnet (2026-06-10)** — via workflow #8 (push to
+`vs/testnet-mosip`) to the Verana K8s (namespace `mosip`):
+
+- **URL:** `https://inji-verify.mosip.testnet.verana.network` (valid TLS, nginx ingress)
+- **Image:** `veranalabs/inji-verify:4a635fd` (commit `4a635fd`)
+- **Live validation** (`POST /api/verify`, fixtures in `public/fixtures/`):
+  - `valid-resident-id` → `TRUSTED_AUTHORIZED`, org "MOSIP Pilot Authority"
+  - `self-signed` (valid sig, unregistered `did:key`) → `UNTRUSTED`
+  - `wrong-schema` (trusted issuer, unauthorized schema) → `TRUSTED_NOT_AUTHORIZED`
+  - `tampered` → `INVALID_CREDENTIAL`
+  - SSRF probe `did:web:169.254.169.254` → refused (`INVALID_CREDENTIAL`, host blocked pre-fetch)
 
 ## Phase 2 starting point
 
