@@ -1,0 +1,77 @@
+# inji-certify-vs — static did:web host for the Inji Certify issuer identity.
+#
+# Serves the issuer DID document (with the holder-signed ECS-SERVICE linked-VP)
+# at https://inji-certify-vs.mosip.testnet.verana.network so the Verana resolver
+# can establish it as a Trusted Verifiable Service. The credential-signing key
+# lives off-cluster (Inji Certify's Key Manager); only its public document is served here.
+#
+# The workflow creates the `inji-certify-vs-files` ConfigMap from inji-certify-vs/public/
+# before applying this manifest.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inji-certify-vs
+  labels: { app: inji-certify-vs }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: inji-certify-vs }
+  template:
+    metadata:
+      labels: { app: inji-certify-vs }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          volumeMounts:
+            - name: files
+              mountPath: /usr/share/nginx/html/.well-known/did.json
+              subPath: did.json
+            - name: files
+              mountPath: /usr/share/nginx/html/vt/schemas-service-c-vp.json
+              subPath: service-vp.json
+      volumes:
+        - name: files
+          configMap:
+            name: inji-certify-vs-files
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inji-certify-vs
+spec:
+  selector: { app: inji-certify-vs }
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inji-certify-vs
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - inji-certify-vs.mosip.testnet.verana.network
+      secretName: inji-certify-vs.mosip.testnet.verana.network-cert
+  rules:
+    - host: inji-certify-vs.mosip.testnet.verana.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: inji-certify-vs
+                port:
+                  number: 80

@@ -1,0 +1,45 @@
+name: 7_ Deploy Inji Certify VS (did:web host)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - vs/testnet-mosip
+    paths:
+      - 'inji-certify-vs/**'
+      - '.github/workflows/7_deploy-inji-certify-vs.yml'
+
+jobs:
+  deploy-inji-certify-vs:
+    name: Deploy Inji Certify issuer did:web host
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy did:web host
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          HOST="inji-certify-vs.mosip.testnet.verana.network"
+          echo "Namespace: $NS  Host: $HOST"
+          kubectl create configmap inji-certify-vs-files -n "$NS" \
+            --from-file=did.json=inji-certify-vs/public/did.json \
+            --from-file=service-vp.json=inji-certify-vs/public/service-vp.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
+          kubectl rollout restart deployment/inji-certify-vs -n "$NS"
+          kubectl rollout status deployment/inji-certify-vs -n "$NS" --timeout=180s
+          echo "Deployed: https://${HOST}/.well-known/did.json"
