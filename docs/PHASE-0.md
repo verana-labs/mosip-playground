@@ -109,8 +109,16 @@ The namespace defaults to `mosip` in the workflow (`CHART_NAMESPACE:-mosip`), so
 secret is required. The only secret needed for the org deploy is `VS_DEMO_MNEMONIC` (plus the org-level
 `OVH_KUBECONFIG` scoped to this repo).
 
-**Inji issuer (Milestone B′): not yet on K8s.** Proven end-to-end on a throwaway VPS (TRUSTED + authorized,
-config-only binding); deploying the Inji Certify stack + its `did:web` to the cluster is the next build.
+**Inji issuer (Milestone B′): DEPLOYED + TRUSTED + authorized on testnet (2026-06-09).**
+
+- **DID:** `did:web:inji-certify-vs.mosip.testnet.verana.network` — a static `did:web` host (`inji-certify-vs/`,
+  nginx + ConfigMap, deployed by **workflow #7** on push) serving the DID document + the org-issued,
+  **holder-signed** ECS-SERVICE linked-VP.
+- **Q1 → TRUSTED** (the ECS-SERVICE chains to the TRUSTED org).
+- **Q2 → authorized** for the resident-id VTJSC (`…/vt/schemas-resident-id-jsc.json`) via ISSUER permission `746` (ACTIVE).
+- The issuer signing key is **controlled off-cluster** (so the linked-VP can be holder-signed, which the resolver
+  requires). Wiring the live **Inji Certify OID4VCI app + eSignet** issuance — which signs real credentials with that
+  key — is the documented follow-up.
 
 ## Known follow-up (not a Phase-0 blocker)
 
