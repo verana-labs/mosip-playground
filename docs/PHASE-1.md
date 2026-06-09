@@ -139,17 +139,17 @@ Known limitations, acceptable for the testnet pilot, documented for production:
 
 ## Deployment status
 
-**DEPLOYED + all spec paths validated live on testnet (2026-06-10)** — via workflow #8 (push to
-`vs/testnet-mosip`) to the Verana K8s (namespace `mosip`):
+**DEPLOYED (real-verify-service integration) + validated live on testnet (2026-06-10)** — namespace
+`mosip` on the Verana K8s:
 
-- **URL:** `https://inji-verify.mosip.testnet.verana.network` (valid TLS, nginx ingress)
-- **Image:** `veranalabs/inji-verify:4a635fd` (commit `4a635fd`)
-- **Live validation** (`POST /api/verify`, fixtures in `public/fixtures/`):
-  - `valid-resident-id` → `TRUSTED_AUTHORIZED`, org "MOSIP Pilot Authority"
-  - `self-signed` (valid sig, unregistered `did:key`) → `UNTRUSTED`
-  - `wrong-schema` (trusted issuer, unauthorized schema) → `TRUSTED_NOT_AUTHORIZED`
-  - `tampered` → `INVALID_CREDENTIAL`
-  - SSRF probe `did:web:169.254.169.254` → refused (`INVALID_CREDENTIAL`, host blocked pre-fetch)
+- **Portal:** `https://inji-verify.mosip.testnet.verana.network` (`veranalabs/inji-verify`, workflow #8)
+- **verify-service:** official `injistack/inji-verify-service:0.18.1` + postgres, in-cluster ClusterIP
+  `verify-service:8080` (workflow #9). The portal's `VERIFY_SERVICE_URL` points at it.
+- **Live validation** (`POST /api/verify` → real verify-service + Verana, all 4 pass):
+  - `valid-resident-id` → MOSIP sig+expiry valid, Verana TRUSTED+accredited → `TRUSTED_AUTHORIZED` ("MOSIP Pilot Authority")
+  - `self-signed` → MOSIP valid, not on Verana → `UNTRUSTED`
+  - `wrong-schema` → MOSIP valid, Verana trusted-not-accredited → `TRUSTED_NOT_AUTHORIZED`
+  - `tampered` → MOSIP `ERR_SIGNATURE_VERIFICATION_FAILED` → `INVALID_CREDENTIAL`
 
 ## Phase 2 starting point
 
