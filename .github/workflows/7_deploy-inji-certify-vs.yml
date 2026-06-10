@@ -54,9 +54,11 @@ jobs:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
-          # the old crashlooping postgres + its PVCs are superseded by ephemeral emptyDir volumes
-          kubectl delete deployment postgres-certify -n "$NS" --ignore-not-found
-          kubectl delete pvc inji-certify-pg inji-certify-keystore -n "$NS" --ignore-not-found
+          # the old PVC-backed deployments deadlock on RWO multi-attach; delete them so the new
+          # emptyDir-backed pods replace them cleanly. delete the deployments first (releases the
+          # PVCs), then the PVCs non-blocking (--wait=false avoids hanging on finalizers).
+          kubectl delete deployment postgres-certify inji-certify -n "$NS" --ignore-not-found --wait=true --timeout=120s || true
+          kubectl delete pvc inji-certify-pg inji-certify-keystore -n "$NS" --ignore-not-found --wait=false || true
           kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
           # restart so config/DB changes are picked up
           kubectl rollout restart deployment/inji-certify-did deployment/inji-certify -n "$NS" 2>/dev/null || true
