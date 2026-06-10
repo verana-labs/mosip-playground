@@ -10,13 +10,20 @@
       "type": "Ed25519VerificationKey2020",
       "controller": "did:web:inji-certify-vs.mosip.testnet.verana.network",
       "publicKeyMultibase": "z6Mkqm2Pb5VYe76Z8WJpVmMUA7oKZBD5uJsqwT4KwTuDKe6P"
+    },
+    {
+      "id": "did:web:inji-certify-vs.mosip.testnet.verana.network#eY-odkPbD_FPJ0XJ-rQxtIqXRJj1HG6bTGSamoOPeBQ",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:inji-certify-vs.mosip.testnet.verana.network",
+      "publicKeyMultibase": "z6MkuGoHWszijkjUdFokSGtUsp2HWiu5hpugYH2HuM77Zghb"
     }
   ],
   "authentication": [
     "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1"
   ],
   "assertionMethod": [
-    "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1"
+    "did:web:inji-certify-vs.mosip.testnet.verana.network#key-1",
+    "did:web:inji-certify-vs.mosip.testnet.verana.network#eY-odkPbD_FPJ0XJ-rQxtIqXRJj1HG6bTGSamoOPeBQ"
   ],
   "service": [
     {
