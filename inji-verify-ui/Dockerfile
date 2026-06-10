@@ -13,6 +13,7 @@ RUN if ! grep -q 'verana-trust-panel.js' /usr/share/nginx/html/index.html; then 
 
 # Make the resolver URL configurable through the image's existing env mechanism
 # (configure_start.sh reads .env into window._env_; a container env var overrides it).
+# printf with a leading newline: the base image's .env has no trailing newline.
 RUN if ! grep -q 'VERANA_RESOLVER_URL' /usr/share/nginx/html/.env; then \
-      echo 'VERANA_RESOLVER_URL=https://resolver.testnet.verana.network' >> /usr/share/nginx/html/.env; \
+      printf '\nVERANA_RESOLVER_URL=https://resolver.testnet.verana.network\n' >> /usr/share/nginx/html/.env; \
     fi
