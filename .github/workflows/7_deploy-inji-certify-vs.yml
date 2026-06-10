@@ -37,7 +37,7 @@ jobs:
           kubectl create configmap inji-certify-config -n "$NS" \
             --from-file=certify-default.properties=inji-certify-vs/certify/config/certify-default.properties \
             --from-file=certify-residentid.properties=inji-certify-vs/certify/config/certify-residentid.properties \
-            --from-file=resident_identity_data.csv=inji-certify-vs/certify/data/resident_identity_data.csv \
+            --from-file=resident_identity_data.csv=inji-certify-vs/certify/registry/resident_identity_data.csv \
             --dry-run=client -o yaml | kubectl apply -f -
           # postgres init (MOSIP schema + our Foundational Resident ID credential_config)
           kubectl create configmap inji-certify-initdb -n "$NS" \
