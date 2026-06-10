@@ -1,161 +1,131 @@
 # MOSIP × Verana — Phase 1 (Inji Verify Trust Check)
 
 Implementation + runbook + state for Phase 1. Spec: `verana-labs/integration-sandbox` →
-`mosip/phase-1-inji-verify-trust-check.md`. Builds directly on [PHASE-0](PHASE-0.md) — read that
-first; the issuer, schema and VTJSC referenced everywhere here were created there.
+`mosip/phase-1-inji-verify-trust-check.md`. Builds on [PHASE-0](PHASE-0.md) — the issuer, schema and
+VTJSC referenced here were created there.
 
 ## TL;DR
 
-Phase 1 turns "the signature is valid" into "the issuer is accredited" — as an **additive layer on
-the real MOSIP Inji Verify**, recreating none of its verification. The **`inji-verify-vs/`** portal
-(Next.js) delegates verification to MOSIP's official **`verify-service`** (image
-`injistack/inji-verify-service:0.18.1`, the same code Inji Verify ships) and then adds the Verana
-trust check on top:
+Phase 1 turns Inji Verify's "the signature is valid" into "the issuer is **accredited**" — as an
+**additive layer on the real MOSIP Inji stack**, reusing the official components unmodified and
+wiring Verana on top by hooking the existing API calls. Nothing is reconstructed and nothing is
+forked:
 
-1. POST the credential to `verify-service` `/v1/verify/v2/vc-verification` → real MOSIP
-   signature + schema + expiry verification.
-2. If valid, extract `issuer` + `credentialSchema.id` and ask the Verana Trust Resolver **Q1** (is
-   the issuer a Trusted Verifiable Service?) and **Q2** (is it an accredited ISSUER of this schema?).
-3. Render one combined verdict with the issuer's real-world identity ("Issued by **MOSIP Pilot
-   Authority**, IN — accredited issuer of Foundational Resident ID").
+- **Verification** is the official `injistack/inji-verify-service:0.18.1` (which embeds
+  `mosip/vc-verifier`) — signature, schema, expiry, status.
+- **The portal** is the official `injistack/inji-verify-ui:0.18.1` — used as the Docker **base
+  image**, with one add-on script layered on top (no source fork).
+- **The trust layer** is a small browser add-on (`verana-trust-panel.js`) that hooks the
+  verify-service `fetch`, and after Inji Verify confirms the credential, asks the Verana Trust
+  Resolver **Q1** (Trusted VS?) + **Q2** (accredited issuer for this VTJSC?) and renders a trust
+  panel into the result screen.
 
-This was an explicit **pivot** (2026-06-10): an earlier build did its own `@digitalbazaar`
-verification, but that reconstruction diverged from MOSIP's real verifier. We confirmed the Phase-0
-credential verifies cleanly in the real `verify-service`, so Phase 1 now integrates with the official
-suite and only owns the trust layer.
+```
+upload QR → Inji Verify UI → verify-service (vc-verifier: sig/schema/expiry)
+                                   │  (add-on hooks this fetch)
+                                   ▼
+                          Verana Trust Resolver Q1+Q2 → trust panel in the UI
+```
 
-| Credential | MOSIP verify-service | Verana | Verdict |
+| Credential | Inji Verify (MOSIP) | Verana | Panel |
 |---|---|---|---|
-| Phase-0 issuer, resident-id VTJSC | sig+expiry valid | TRUSTED + accredited | `TRUSTED_AUTHORIZED` + org identity |
-| self-signed `did:key` | **valid** | not on network | `UNTRUSTED` — authentic ≠ accredited |
-| Phase-0 issuer, schema it has no permission for | valid | trusted, not accredited | `TRUSTED_NOT_AUTHORIZED` |
-| tampered after signing | **invalid** (`ERR_SIGNATURE_VERIFICATION_FAILED`) | — | `INVALID_CREDENTIAL` |
-| no `credentialSchema` reference | valid | trusted | `TRUSTED_NO_SCHEMA` |
-| resolver unreachable | valid | — | `RESOLVER_UNAVAILABLE` (fails closed) |
-| verify-service unreachable | — | — | `VERIFY_SERVICE_UNAVAILABLE` (fails closed) |
+| Phase-0 issuer, resident-id VTJSC | valid | TRUSTED + accredited | **Accredited issuer — MOSIP Pilot Authority** |
+| self-signed `did:key` | **valid** | not on network | **Untrusted issuer** — authentic ≠ legitimate |
+| Phase-0 issuer, wrong schema | valid | trusted, not accredited | Trusted service, not accredited for this credential |
+| tampered | **invalid** | — | (no panel — Inji Verify rejects it) |
 
-## What this is (and is not)
+## Spec compliance (Actors & artifacts)
 
-This is the **additive Phase-1 trust layer** over the real MOSIP verifier — exactly the "additional
-layer to existing verifier systems" the spec describes. The portal owns only orchestration +
-trust + UI; **all credential verification is MOSIP's** (`verify-service`, deployed unmodified). The
-guided end-to-end showcase UI is a separate thing (issue #2) and should consume this portal.
+| Spec component | Spec name/repo | This implementation |
+|---|---|---|
+| Verifier portal | `mosip/inji-verify` | official `inji-verify-ui` image, used as base (add-on layered on) |
+| Verifier library | `mosip/vc-verifier` | embedded in the official `verify-service` we deploy |
+| Trust resolver client | new module / SDK add-on | `inji-verify-ui/public/verana-trust-panel.js` |
+| Verana Trust Resolver | `verana-resolver` (REST) | `resolver.testnet.verana.network` Q1 + Q2 |
 
-`lib/verana/` (resolver client + verdict mapping) is the portable trust core: pure logic, no Next.js
-imports, unit-tested — the module to port into `vc-verifier` for an upstream contribution.
+This is the spec's "additive layer to existing verifier systems" — the trust panel renders **inside
+the official Inji Verify UI** (spec step 4), gated by the presence of the add-on (a feature flag).
 
-## Architecture
+## How the add-on works (read before touching it)
 
-```
-POST /api/verify  { ...arbitrary VC JSON... }
-  │
-  ├─ 1. verify   lib/mosip/verify-service.ts   → POST verify-service /v1/verify/v2/vc-verification
-  │              (real MOSIP: signature + schema + expiry; injistack/inji-verify-service:0.18.1)
-  ├─ 2. extract  lib/vc/extract.ts             issuer DID + credentialSchema.id (VTJSC URL)
-  ├─ 3. resolve  lib/verana/resolver.ts        Q1 /v1/trust/resolve?detail=full · Q2 /v1/trust/issuer-authorization
-  └─ 4. verdict  lib/verana/verdict.ts         single Verdict + IssuerIdentity (org name, country, registry id, ecosystem)
-```
+`inji-verify-ui/Dockerfile` is `FROM injistack/inji-verify-ui:0.18.1` and does three things: copy
+`verana-trust-panel.js` into the web root, `sed`-inject a `<script>` tag into `index.html`, and
+append `VERANA_RESOLVER_URL` to the image's `.env` (so it flows into `window._env_` via the image's
+own `configure_start.sh`). The script (vanilla JS, no build step):
 
-Resolver semantics learned by probing (handle all three!):
-- Q1 unknown DID → **HTTP 404** `{error: "Not Found"}` — means "no trust evaluation", i.e. UNTRUSTED.
-- Q2 wrong schema or unknown DID → **HTTP 200** `{authorized: false}`.
-- Q1 `detail=full` → `credentials[]` with `ecsType: ECS-SERVICE / ECS-ORG`; the org identity shown in
-  the UI comes from the ECS-ORG entry (`claims.name/countryCode/registryId`), the service name from
-  the ECS-SERVICE entry whose `id` equals the resolved DID. Only `result: "VALID"` entries are used.
+1. **Hooks `window.fetch`** — when it sees a `POST .../vc-verification`, it captures the request
+   (the credential being verified) and the response (`allChecksSuccessful` / `verificationStatus`).
+2. **On a successful verification**, extracts the issuer DID + `credentialSchema.id` and calls the
+   Verana resolver Q1 (`/v1/trust/resolve?detail=full`) + Q2 (`/v1/trust/issuer-authorization`).
+   The resolver is **CORS-open** (`access-control-allow-origin: *`), so this is a direct browser
+   call — no proxy, the UI pod never touches the resolver.
+3. **Renders** a `#verana-trust-panel` into `#result-section` with the verdict + issuer identity.
+   Fail-closed: a 404/malformed/unreachable resolver never yields a trusted verdict.
 
-## Non-obvious things learned (read before touching this)
+Non-obvious things:
+- **`.env` append needs a leading newline** — the base image's `.env` has no trailing newline, so a
+  bare `>>` merges the new key into `DISPLAY_TIMEOUT`. Use `printf '\n...\n'`.
+- **Input is QR only.** Inji Verify verifies credentials presented as QR (scan or image upload), not
+  raw JSON. Generate a test QR with `@injistack/pixelpass` `generateQRData(<vc json>)` → render with
+  `qrcode`. (Decode pairs with `decode`, not `toJson` — `toJson` is the CBOR / Claim-169 path.)
+- **The standalone `inji-verify-vs` portal was retired** — it was an earlier, non-spec-faithful
+  reconstruction. The official-UI add-on replaces it.
 
-1. **Verification is MOSIP's, not ours.** The portal does NOT verify signatures — it POSTs the raw VC
-   to `verify-service` `/v1/verify/v2/vc-verification` (`{verifiableCredential: <string>,
-   skipStatusChecks, includeClaims}`) and reads `{allChecksSuccessful, schemaAndSignatureCheck,
-   expiryCheck, claims}`. The standalone `io.mosip:vcverifier-jar:1.2.0` Maven lib behaves
-   differently (stricter id rule, did:web `/did.json` not `.well-known`, Ed25519 canonicalization) —
-   do NOT use the library as a proxy for the service; test against the real `verify-service`.
-2. **Phase-0 credentials verify cleanly in the real service.** The committed fixtures (did:web issuer,
-   `@digitalbazaar` Ed25519Signature2020, `urn:uuid` or https id) all pass `verify-service`; tampering
-   yields `ERR_SIGNATURE_VERIFICATION_FAILED`. No Phase-0 issuer changes were needed.
-3. **Test credentials are config-only to produce.** `scripts/sign-fixtures.mjs` signs what Inji
-   Certify's DataProvider template emits (ldp_vc, `credentialSchema: {id: <VTJSC>, type:
-   JsonSchemaCredential}`, type includes `VerifiableTrustCredential`). Needs the issuer key, NOT in
-   the repo: `KEY_PATH=~/.verana/mosip/inji-certify-vs-key.json npm run fixtures`. (These are dev-only;
-   the runtime no longer depends on `@digitalbazaar`.)
-4. **Fail-closed both ways.** verify-service unreachable → `VERIFY_SERVICE_UNAVAILABLE`; resolver
-   unreachable/malformed → `RESOLVER_UNAVAILABLE`. Neither ever becomes a trusted verdict.
+## Architecture (in this repo)
+
+- `verify-service-vs/` — official `verify-service` + ephemeral postgres (workflow #9).
+- `inji-verify-ui/` — the add-on: `Dockerfile` (FROM the official UI image) + `public/verana-trust-panel.js` (workflow #10).
+- `verify-service` is internal ClusterIP only; the UI's nginx proxies `/v1/verify` → `verify-service:8080`.
 
 ## Runbook
 
 ```bash
-# local — run the real MOSIP stack, then the portal against it
-cd inji-verify-official/docker-compose && docker compose up -d   # verify-service :8080, ui, postgres
-cd inji-verify-vs && npm install && npm test                     # 36 unit tests
-VERIFY_SERVICE_URL=http://localhost:8080 npm run dev             # portal at http://localhost:3000
+# local — official Inji stack, then the add-on UI against it
+cd inji-verify-official/docker-compose && docker compose up -d   # verify-service :8080 + postgres
+cd inji-verify-ui && docker build -t inji-verify-ui:dev .
+docker run -d --network docker-compose_default -p 3030:8000 inji-verify-ui:dev
+# open http://localhost:3030 → Upload QR Code → upload a test QR
 
-# deploy — verify-service first (workflow #9), then the portal (workflow #8)
-gh workflow run 9_deploy-verify-service.yml -R verana-labs/mosip-playground --ref vs/testnet-mosip
-gh workflow run 8_deploy-inji-verify-vs.yml -R verana-labs/mosip-playground --ref vs/testnet-mosip
-# → verify-service (injistack/inji-verify-service:0.18.1) + postgres in-cluster at verify-service:8080
-# → portal at https://inji-verify.mosip.testnet.verana.network (VERIFY_SERVICE_URL wired to it)
+# deploy — verify-service first (#9), then the UI add-on (#10)
+gh workflow run 9_deploy-verify-service.yml  -R verana-labs/mosip-playground --ref vs/testnet-mosip
+gh workflow run 10_deploy-inji-verify-ui.yml -R verana-labs/mosip-playground --ref vs/testnet-mosip
+# → https://inji-verify-ui.mosip.testnet.verana.network
 
-# validate live
-BASE=https://inji-verify.mosip.testnet.verana.network
-for f in valid-resident-id self-signed wrong-schema tampered; do
-  curl -s -X POST "$BASE/api/verify" -H 'content-type: application/json' \
-    --data-binary @inji-verify-vs/public/fixtures/$f.json | jq '{f: "'$f'", verdict}'
-done
+# generate test QRs from the fixtures (PixelPass)
+#   node -e "import('@injistack/pixelpass').then(async p => { ... generateQRData(vc) ... })"
 ```
 
-Config (env): `VERIFY_SERVICE_URL` (default `http://localhost:8080`, set to `http://verify-service:8080`
-in-cluster), `VERANA_RESOLVER_URL` (default `https://resolver.testnet.verana.network`),
-`VERANA_RESOLVER_TIMEOUT_MS` (10000), `VERANA_RESOLVER_CACHE_TTL_MS` (300000).
-
-## Security
-
-The portal accepts arbitrary, unauthenticated credential JSON. After the pivot, the portal no longer
-fetches anything attacker-controlled (no more `did:web` resolution in our code — `verify-service`
-does that internally, inside the cluster), so the earlier SSRF surface is gone with the deleted
-`lib/vc/document-loader.ts`. What remains hardened (from the earlier code review + security audit):
-
-- **Fail-closed trust decisions.** The resolver response is runtime-validated
-  (`lib/verana/validate.ts`): `trustStatus` must be an exact enum value, `authorized` a real boolean,
-  and the echoed `did`/`vtjscId` must match the request — otherwise the verdict becomes
-  `RESOLVER_UNAVAILABLE`, never trusted. `buildTrustReport` requires `trustStatus === "TRUSTED"` to
-  reach the authorization gate; everything else is non-trusted. A malformed/spoofed resolver payload
-  cannot mint `TRUSTED_AUTHORIZED`. This is the bug that mattered most and it travels with `lib/verana/`.
-- **Fail-closed on both backends.** verify-service unreachable → `VERIFY_SERVICE_UNAVAILABLE`; resolver
-  unreachable → `RESOLVER_UNAVAILABLE`. A valid signature with no reachable trust check is never trusted.
-- **DoS limits:** 128KB body cap (byte-accurate + ingress `proxy-body-size`), a structural pre-check
-  capping JSON depth/node-count/proof-count (`lib/vc/structural-guard.ts`), capped response reads
-  (`lib/safe-fetch.ts`), and bounded LRU+TTL resolver cache with in-flight coalescing
-  (`lib/bounded-cache.ts`).
-- **NetworkPolicy egress** (workflow #8): portal egress restricted to DNS + the in-cluster
-  `verify-service:8080` + public HTTPS (the Verana resolver); cluster-internal/metadata IPs otherwise
-  blocked. `verify-service` itself is internal ClusterIP only (no public ingress).
-
-Known limitations, acceptable for the testnet pilot, documented for production:
-- **No schema-conformance check.** Authorization verifies the issuer is accredited for the schema the
-  credential *names*; it does not fetch the VTJSC and validate the claims *against* it.
-- **verify-service is unmodified MOSIP** (`injistack/inji-verify-service:0.18.1`) with an ephemeral
-  postgres; revocation (`credentialStatus`) checks are skipped in the demo (`skipStatusChecks: true`).
+Config (env on the UI deploy): `VERANA_RESOLVER_URL` (default `https://resolver.testnet.verana.network`).
 
 ## Deployment status
 
-**DEPLOYED (real-verify-service integration) + validated live on testnet (2026-06-10)** — namespace
-`mosip` on the Verana K8s:
+**DEPLOYED + validated live on testnet (2026-06-10):**
 
-- **Portal:** `https://inji-verify.mosip.testnet.verana.network` (`veranalabs/inji-verify`, workflow #8)
-- **verify-service:** official `injistack/inji-verify-service:0.18.1` + postgres, in-cluster ClusterIP
-  `verify-service:8080` (workflow #9). The portal's `VERIFY_SERVICE_URL` points at it.
-- **Live validation** (`POST /api/verify` → real verify-service + Verana, all 4 pass):
-  - `valid-resident-id` → MOSIP sig+expiry valid, Verana TRUSTED+accredited → `TRUSTED_AUTHORIZED` ("MOSIP Pilot Authority")
-  - `self-signed` → MOSIP valid, not on Verana → `UNTRUSTED`
-  - `wrong-schema` → MOSIP valid, Verana trusted-not-accredited → `TRUSTED_NOT_AUTHORIZED`
-  - `tampered` → MOSIP `ERR_SIGNATURE_VERIFICATION_FAILED` → `INVALID_CREDENTIAL`
+- **Portal:** `https://inji-verify-ui.mosip.testnet.verana.network` — official `inji-verify-ui` +
+  Verana add-on (`veranalabs/inji-verify-ui`, workflow #10).
+- **verify-service:** official `injistack/inji-verify-service:0.18.1` + postgres, in-cluster
+  `verify-service:8080` (workflow #9).
+- **Validated in a real browser** (QR upload): trusted credential → "Accredited issuer — MOSIP Pilot
+  Authority"; self-signed `did:key` → "Untrusted issuer" (valid signature, not on Verana).
+
+## Resolver semantics (handle all three)
+
+- Q1 unknown DID → **HTTP 404** → "no trust evaluation", i.e. UNTRUSTED.
+- Q2 wrong schema / unknown DID → **HTTP 200** `{authorized:false}`.
+- Q1 `detail=full` → `credentials[]` with `ecsType: ECS-SERVICE / ECS-ORG`; org identity comes from
+  the ECS-ORG entry, service name from the ECS-SERVICE entry whose `id` equals the resolved DID;
+  only `result: "VALID"` entries are used.
+
+## Known limitations (testnet pilot)
+
+- The panel reads `organizationName`, `countryCode`, `registryId`, `ecosystem`; the spec also names
+  `legalJurisdiction` and `permState` — deferred.
+- No offline Claim 169 / PixelPass freshness fallback (spec step 5) — deferred.
+- `verify-service` runs with `skipStatusChecks: true` (revocation not checked in the demo).
 
 ## Phase 2 starting point
 
-Phase 2 = holder protection (`mosip/phase-2-holder-verifier-protection.md`): the wallet verifies the
-**verifier** before presenting (resolver Trust Question 3, `/v1/trust/verifier-authorization`-style).
-The pieces that carry over: `lib/verana/` (add the Q3 call next to Q2), the documentLoader, and the
-fixture-signing recipe. The missing piece from Phase 0 is still live OID4VCI issuance
-(Inji Certify + eSignet) — without it, Phase 2's "verifier asks, wallet checks" flow needs the same
-hand-signed-credential approach used here.
+Phase 2 (holder protection) is the **same add-on shape**: hook the wallet/presentation flow, call the
+resolver's verifier-authorization (Trust Question 3), surface "is this verifier accountable?" before
+presenting. The reusable pieces: the official-stack-plus-add-on pattern, the resolver client, and the
+fixture/QR tooling.

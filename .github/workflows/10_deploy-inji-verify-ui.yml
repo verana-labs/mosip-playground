@@ -51,6 +51,17 @@ jobs:
           printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
           chmod 600 ~/.kube/config
 
+      - name: Retire the old standalone portal (inji-verify-vs)
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          echo "Removing superseded standalone portal from namespace $NS"
+          kubectl delete deployment inji-verify-vs -n "$NS" --ignore-not-found
+          kubectl delete service inji-verify-vs -n "$NS" --ignore-not-found
+          kubectl delete ingress inji-verify-vs -n "$NS" --ignore-not-found
+          kubectl delete networkpolicy inji-verify-vs-egress -n "$NS" --ignore-not-found
+
       - name: Deploy
         env:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}

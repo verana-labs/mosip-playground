@@ -1,0 +1,59 @@
+- generic [ref=e4]:
+  - navigation [ref=e5]:
+    - generic [ref=e6]:
+      - link [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+      - list [ref=e20]:
+        - listitem [ref=e21]:
+          - link "Home" [ref=e22] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=e23]:
+          - link "Verify Credentials" [ref=e24] [cursor=pointer]:
+            - /url: /verify
+        - listitem [ref=e25]:
+          - button "Help" [ref=e26] [cursor=pointer]:
+            - text: Help
+            - img [ref=e27]
+      - generic [ref=e31]:
+        - img [ref=e32]
+        - button "English" [ref=e35] [cursor=pointer]:
+          - paragraph [ref=e36]: English
+          - img [ref=e38]
+  - generic [ref=e41]:
+    - generic [ref=e42]:
+      - paragraph [ref=e43]: Verify credentials with ease!
+      - paragraph [ref=e44]: Effortlessly verify credentials with Inji Verify! Just scan the QR code or upload it for instant validation, following the steps below.
+    - generic [ref=e48]:
+      - button "Upload QR Code" [ref=e49] [cursor=pointer]
+      - button "Scan QR Code" [ref=e50] [cursor=pointer]
+      - button "VP Verification" [ref=e51] [cursor=pointer]
+      - button "BLE" [ref=e52] [cursor=pointer]
+  - generic [ref=e54]:
+    - generic [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - generic [ref=e62]: "1"
+          - generic [ref=e63]: Upload QR Code
+        - paragraph [ref=e70]: Upload a file that contains a QR code
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - generic [ref=e77]: "2"
+          - generic [ref=e78]: Verify document
+        - paragraph [ref=e85]: Verification for the document or card is in progress.
+      - generic [ref=e89]:
+        - generic [ref=e90]:
+          - generic [ref=e92]: "3"
+          - generic [ref=e93]: View result
+        - paragraph [ref=e97]: View the verification result.
+    - generic [ref=e100]:
+      - generic [ref=e102]:
+        - button "Upload" [ref=e103] [cursor=pointer]:
+          - generic [ref=e104]:
+            - img [ref=e107]
+            - generic [ref=e111]:
+              - img [ref=e113]
+              - generic [ref=e115]: Upload
+        - button [ref=e116]
+      - paragraph [ref=e118]: "Allowed file formats: PNG/JPEG/JPG/PDF File Size - 10KB to 5MB"
+  - paragraph [ref=e121]: 2024 © MOSIP - All rights reserved.

@@ -1,0 +1,1 @@
+[    1630ms] [ERROR] Error loading claims from ConfigMap: SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON @ https://inji-verify-ui.mosip.testnet.verana.network/static/js/main.0e46e3e8.js:1

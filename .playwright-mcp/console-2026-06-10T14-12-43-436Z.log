@@ -1,0 +1,1 @@
+[     421ms] [ERROR] Error loading claims from ConfigMap: SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON @ http://localhost:3030/static/js/main.0e46e3e8.js:1
