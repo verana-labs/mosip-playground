@@ -62,6 +62,16 @@ jobs:
           kubectl rollout status deployment/inji-certify -n "$NS" --timeout=600s
           echo "Inji Certify: https://inji-certify-vs.mosip.testnet.verana.network/v1/certify"
 
+      - name: Debug Certify on failure
+        if: failure()
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          echo "::group::pods"; kubectl get pods -n "$NS" -l app=inji-certify -o wide; echo "::endgroup::"
+          echo "::group::describe"; kubectl describe deployment/inji-certify -n "$NS" | tail -40; echo "::endgroup::"
+          echo "::group::certify logs"; kubectl logs deployment/inji-certify -n "$NS" --tail=400 --all-containers 2>&1 | tail -250; echo "::endgroup::"
+
       - name: Summary
         if: always()
         run: |
