@@ -7,3 +7,6 @@ data/
 # Generated IDs
 */ids.env
 .DS_Store
+
+# Test artifacts
+.playwright-mcp/
