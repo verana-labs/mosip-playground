@@ -1,4 +1,4 @@
-name: 7_ Deploy Inji Certify VS (did:web host)
+name: 7_ Deploy Inji Certify VS (real issuer)
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   deploy-inji-certify-vs:
-    name: Deploy Inji Certify issuer did:web host
+    name: Deploy real MOSIP Inji Certify + Verana did:web identity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,18 +28,45 @@ jobs:
           printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Deploy did:web host
+      - name: Create ConfigMaps (certify config, db init, did:web files)
         env:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
-          HOST="inji-certify-vs.mosip.testnet.verana.network"
-          echo "Namespace: $NS  Host: $HOST"
+          # Inji Certify config: MOSIP's base properties + our resident-id profile + the resident CSV
+          kubectl create configmap inji-certify-config -n "$NS" \
+            --from-file=certify-default.properties=inji-certify-vs/certify/config/certify-default.properties \
+            --from-file=certify-residentid.properties=inji-certify-vs/certify/config/certify-residentid.properties \
+            --from-file=resident_identity_data.csv=inji-certify-vs/certify/data/resident_identity_data.csv \
+            --dry-run=client -o yaml | kubectl apply -f -
+          # postgres init (MOSIP schema + our Foundational Resident ID credential_config)
+          kubectl create configmap inji-certify-initdb -n "$NS" \
+            --from-file=certify_init.sql=inji-certify-vs/certify/db/certify_init.sql \
+            --dry-run=client -o yaml | kubectl apply -f -
+          # the Verana-facing did:web document + ECS-SERVICE linked-VP
           kubectl create configmap inji-certify-vs-files -n "$NS" \
             --from-file=did.json=inji-certify-vs/public/did.json \
             --from-file=service-vp.json=inji-certify-vs/public/service-vp.json \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
           kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
-          kubectl rollout restart deployment/inji-certify-vs -n "$NS"
-          kubectl rollout status deployment/inji-certify-vs -n "$NS" --timeout=180s
-          echo "Deployed: https://${HOST}/.well-known/did.json"
+          # restart so config/DB changes are picked up
+          kubectl rollout restart deployment/inji-certify-did deployment/inji-certify -n "$NS" 2>/dev/null || true
+          kubectl rollout status deployment/postgres-certify -n "$NS" --timeout=180s
+          kubectl rollout status deployment/inji-certify-did -n "$NS" --timeout=180s
+          kubectl rollout status deployment/inji-certify -n "$NS" --timeout=600s
+          echo "Inji Certify: https://inji-certify-vs.mosip.testnet.verana.network/v1/certify"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Inji Certify (real issuer)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** injistack/inji-certify-with-plugins:0.14.0 (official) + postgres" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Issuance:** https://inji-certify-vs.mosip.testnet.verana.network/v1/certify (Pre-Authorized Code, DataProvider)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **did:web identity:** /.well-known/did.json (Verana ECS-SERVICE linked-VP + Certify signing key)" >> "$GITHUB_STEP_SUMMARY"

@@ -1,25 +1,143 @@
-# inji-certify-vs — static did:web host for the Inji Certify issuer identity.
+# inji-certify-vs — REAL MOSIP Inji Certify issuing the Foundational Resident ID credential,
+# plus a tiny nginx that serves the Verana-facing did:web identity (the ECS-SERVICE linked-VP
+# that keeps the issuer TRUSTED on the Verana resolver) merged with Certify's signing key.
 #
-# Serves the issuer DID document (with the holder-signed ECS-SERVICE linked-VP)
-# at https://inji-certify-vs.mosip.testnet.verana.network so the Verana resolver
-# can establish it as a Trusted Verifiable Service. The credential-signing key
-# lives off-cluster (Inji Certify's Key Manager); only its public document is served here.
+# Routing at https://inji-certify-vs.mosip.testnet.verana.network:
+#   /v1/certify/*        -> inji-certify (issuance, OID4VCI, oauth, Certify's own well-knowns)
+#   /.well-known/did.json + /vt/* -> inji-certify-did (the Verana did:web document + linked-VP)
 #
-# The workflow creates the `inji-certify-vs-files` ConfigMap from inji-certify-vs/public/
-# before applying this manifest.
+# Config (certify-default.properties + certify-residentid.properties + the resident CSV) and the
+# postgres init SQL and the did:web files are created as ConfigMaps by workflow #7 before apply.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inji-certify-pg
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inji-certify-keystore
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: inji-certify-vs
-  labels: { app: inji-certify-vs }
+  name: postgres-certify
+  labels: { app: postgres-certify }
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: inji-certify-vs }
+    matchLabels: { app: postgres-certify }
   template:
     metadata:
-      labels: { app: inji-certify-vs }
+      labels: { app: postgres-certify }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_PASSWORD, value: postgres }
+            - { name: POSTGRES_DB, value: postgres }
+          ports:
+            - containerPort: 5432
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d }
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: initdb
+          configMap: { name: inji-certify-initdb }
+        - name: data
+          persistentVolumeClaim: { claimName: inji-certify-pg }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-certify
+spec:
+  selector: { app: postgres-certify }
+  ports:
+    - { port: 5432, targetPort: 5432 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inji-certify
+  labels: { app: inji-certify }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: inji-certify }
+  template:
+    metadata:
+      labels: { app: inji-certify }
+    spec:
+      securityContext:
+        fsGroup: 1001
+      containers:
+        - name: inji-certify
+          image: injistack/inji-certify-with-plugins:0.14.0
+          ports:
+            - containerPort: 8090
+          env:
+            - { name: container_user, value: mosip }
+            - { name: active_profile_env, value: "default,residentid" }
+            - { name: SPRING_CONFIG_NAME, value: certify }
+            - { name: SPRING_CONFIG_LOCATION, value: /home/mosip/config/ }
+            - { name: enable_certify_artifactory, value: "false" }
+            - { name: download_hsm_client, value: "false" }
+            - { name: mosip_certify_domain_url, value: "https://inji-certify-vs.mosip.testnet.verana.network" }
+          resources:
+            requests: { cpu: 200m, memory: 768Mi }
+            limits: { cpu: "1", memory: 2Gi }
+          volumeMounts:
+            - { name: config, mountPath: /home/mosip/config }
+            - { name: keystore, mountPath: /home/mosip/CERTIFY_PKCS12 }
+          readinessProbe:
+            httpGet: { path: /v1/certify/actuator/health, port: 8090 }
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 40
+      volumes:
+        - name: config
+          configMap: { name: inji-certify-config }
+        - name: keystore
+          persistentVolumeClaim: { claimName: inji-certify-keystore }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inji-certify
+spec:
+  selector: { app: inji-certify }
+  ports:
+    - { port: 8090, targetPort: 8090 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inji-certify-did
+  labels: { app: inji-certify-did }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: inji-certify-did }
+  template:
+    metadata:
+      labels: { app: inji-certify-did }
     spec:
       containers:
         - name: nginx
@@ -30,26 +148,20 @@ spec:
             requests: { cpu: 10m, memory: 16Mi }
             limits: { cpu: 100m, memory: 64Mi }
           volumeMounts:
-            - name: files
-              mountPath: /usr/share/nginx/html/.well-known/did.json
-              subPath: did.json
-            - name: files
-              mountPath: /usr/share/nginx/html/vt/schemas-service-c-vp.json
-              subPath: service-vp.json
+            - { name: files, mountPath: /usr/share/nginx/html/.well-known/did.json, subPath: did.json }
+            - { name: files, mountPath: /usr/share/nginx/html/vt/schemas-service-c-vp.json, subPath: service-vp.json }
       volumes:
         - name: files
-          configMap:
-            name: inji-certify-vs-files
+          configMap: { name: inji-certify-vs-files }
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: inji-certify-vs
+  name: inji-certify-did
 spec:
-  selector: { app: inji-certify-vs }
+  selector: { app: inji-certify-did }
   ports:
-    - port: 80
-      targetPort: 80
+    - { port: 80, targetPort: 80 }
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -61,17 +173,25 @@ metadata:
 spec:
   ingressClassName: nginx
   tls:
-    - hosts:
-        - inji-certify-vs.mosip.testnet.verana.network
+    - hosts: [inji-certify-vs.mosip.testnet.verana.network]
       secretName: inji-certify-vs.mosip.testnet.verana.network-cert
   rules:
     - host: inji-certify-vs.mosip.testnet.verana.network
       http:
         paths:
+          - path: /v1/certify
+            pathType: Prefix
+            backend:
+              service: { name: inji-certify, port: { number: 8090 } }
+          - path: /.well-known/did.json
+            pathType: Exact
+            backend:
+              service: { name: inji-certify-did, port: { number: 80 } }
+          - path: /vt
+            pathType: Prefix
+            backend:
+              service: { name: inji-certify-did, port: { number: 80 } }
           - path: /
             pathType: Prefix
             backend:
-              service:
-                name: inji-certify-vs
-                port:
-                  number: 80
+              service: { name: inji-certify-did, port: { number: 80 } }
