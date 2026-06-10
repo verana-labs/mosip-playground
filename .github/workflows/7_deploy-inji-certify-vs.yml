@@ -54,6 +54,9 @@ jobs:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
+          # the old crashlooping postgres + its PVCs are superseded by ephemeral emptyDir volumes
+          kubectl delete deployment postgres-certify -n "$NS" --ignore-not-found
+          kubectl delete pvc inji-certify-pg inji-certify-keystore -n "$NS" --ignore-not-found
           kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
           # restart so config/DB changes are picked up
           kubectl rollout restart deployment/inji-certify-did deployment/inji-certify -n "$NS" 2>/dev/null || true
@@ -69,7 +72,8 @@ jobs:
         run: |
           NS="${NS_SECRET:-mosip}"
           POD=$(kubectl get pods -n "$NS" -l app=inji-certify -o jsonpath='{.items[0].metadata.name}')
-          echo "::group::pod status"; kubectl get pods -n "$NS" -l app=inji-certify -o wide; echo "::endgroup::"
+          echo "::group::all pods"; kubectl get pods -n "$NS" -l 'app in (inji-certify,postgres-certify,inji-certify-did)' -o wide; echo "::endgroup::"
+          echo "::group::postgres logs"; kubectl logs -n "$NS" -l app=postgres-certify --tail=80 2>&1 | tail -60; echo "::endgroup::"
           echo "::group::pod describe (state + events)"; kubectl describe pod "$POD" -n "$NS" | grep -A60 -iE "State|Events" | tail -50; echo "::endgroup::"
           echo "::group::certify logs (current)"; kubectl logs "$POD" -n "$NS" --tail=400 2>&1 | tail -120; echo "::endgroup::"
           echo "::group::certify logs (previous/crashed container)"; kubectl logs "$POD" -n "$NS" --previous --tail=400 2>&1 | tail -150; echo "::endgroup::"

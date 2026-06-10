@@ -9,26 +9,6 @@
 # Config (certify-default.properties + certify-residentid.properties + the resident CSV) and the
 # postgres init SQL and the did:web files are created as ConfigMaps by workflow #7 before apply.
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: inji-certify-pg
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: inji-certify-keystore
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 64Mi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,6 +29,8 @@ spec:
             - { name: POSTGRES_USER, value: postgres }
             - { name: POSTGRES_PASSWORD, value: postgres }
             - { name: POSTGRES_DB, value: postgres }
+            # init into an empty subdir so postgres ignores the PVC's lost+found
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
           ports:
             - containerPort: 5432
           resources:
@@ -61,7 +43,7 @@ spec:
         - name: initdb
           configMap: { name: inji-certify-initdb }
         - name: data
-          persistentVolumeClaim: { claimName: inji-certify-pg }
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -115,7 +97,7 @@ spec:
         - name: config
           configMap: { name: inji-certify-config }
         - name: keystore
-          persistentVolumeClaim: { claimName: inji-certify-keystore }
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
