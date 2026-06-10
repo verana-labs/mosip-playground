@@ -54,11 +54,9 @@ jobs:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
-          # the old PVC-backed deployments deadlock on RWO multi-attach; delete them so the new
-          # emptyDir-backed pods replace them cleanly. delete the deployments first (releases the
-          # PVCs), then the PVCs non-blocking (--wait=false avoids hanging on finalizers).
+          # delete the deployments first so their RWO PVCs detach (a rolling update would deadlock
+          # on multi-attach); the persistent PVCs themselves are kept so the signing key is stable.
           kubectl delete deployment postgres-certify inji-certify -n "$NS" --ignore-not-found --wait=true --timeout=120s || true
-          kubectl delete pvc inji-certify-pg inji-certify-keystore -n "$NS" --ignore-not-found --wait=false || true
           kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
           # restart only the nginx did host so an updated did.json ConfigMap is picked up
           # (certify + postgres were just recreated by the delete+apply, no restart needed)

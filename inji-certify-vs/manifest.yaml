@@ -8,6 +8,29 @@
 #
 # Config (certify-default.properties + certify-residentid.properties + the resident CSV) and the
 # postgres init SQL and the did:web files are created as ConfigMaps by workflow #7 before apply.
+#
+# postgres + keystore are persistent PVCs so Certify's Ed25519 signing key is STABLE across
+# restarts (the issued VCs' verificationMethod must keep matching the published did:web document).
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inji-certify-pg
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inji-certify-keystore
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,7 +66,7 @@ spec:
         - name: initdb
           configMap: { name: inji-certify-initdb }
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim: { claimName: inji-certify-pg }
 ---
 apiVersion: v1
 kind: Service
@@ -97,7 +120,7 @@ spec:
         - name: config
           configMap: { name: inji-certify-config }
         - name: keystore
-          emptyDir: {}
+          persistentVolumeClaim: { claimName: inji-certify-keystore }
 ---
 apiVersion: v1
 kind: Service
