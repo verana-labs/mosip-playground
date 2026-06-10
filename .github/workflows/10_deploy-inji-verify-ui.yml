@@ -1,0 +1,186 @@
+name: 10_ Deploy Inji Verify UI + Verana trust panel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - vs/testnet-mosip
+    paths:
+      - 'inji-verify-ui/**'
+      - '.github/workflows/10_deploy-inji-verify-ui.yml'
+
+jobs:
+  deploy-inji-verify-ui:
+    name: Build and deploy Inji Verify UI (official image + Verana add-on)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_LOGIN }}
+          password: ${{ secrets.DOCKER_HUB_PWD }}
+
+      # Builds FROM the official injistack/inji-verify-ui image and overlays only
+      # the Verana trust-panel add-on — no fork, no source copy.
+      - name: Build and push UI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inji-verify-ui
+          push: true
+          platforms: linux/amd64
+          tags: |
+            veranalabs/inji-verify-ui:${{ github.sha }}
+            veranalabs/inji-verify-ui:mosip
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Retire the old standalone portal (inji-verify-vs)
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          echo "Removing superseded standalone portal from namespace $NS"
+          kubectl delete deployment inji-verify-vs -n "$NS" --ignore-not-found
+          kubectl delete service inji-verify-vs -n "$NS" --ignore-not-found
+          kubectl delete ingress inji-verify-vs -n "$NS" --ignore-not-found
+          kubectl delete networkpolicy inji-verify-vs-egress -n "$NS" --ignore-not-found
+
+      - name: Deploy
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          APP_NAME="inji-verify-ui"
+          IMAGE="veranalabs/inji-verify-ui:${{ github.sha }}"
+          HOST="inji-verify-ui.mosip.testnet.verana.network"
+          echo "Namespace: $NS  Host: $HOST  Image: $IMAGE"
+
+          cat <<EOF | kubectl apply -n "$NS" -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${APP_NAME}
+            labels:
+              app: ${APP_NAME}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ${APP_NAME}
+            template:
+              metadata:
+                labels:
+                  app: ${APP_NAME}
+              spec:
+                containers:
+                  - name: inji-verify-ui
+                    image: ${IMAGE}
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: 8000
+                    resources:
+                      requests: { cpu: 20m, memory: 32Mi }
+                      limits: { cpu: 200m, memory: 128Mi }
+                    env:
+                      - name: VERANA_TRUST_ENABLED
+                        value: "true"
+                      - name: VERANA_RESOLVER_URL
+                        value: "https://resolver.${NETWORK:-testnet}.verana.network"
+                    readinessProbe:
+                      httpGet: { path: /, port: 8000 }
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${APP_NAME}
+          spec:
+            selector:
+              app: ${APP_NAME}
+            ports:
+              - port: 8000
+                targetPort: 8000
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: ${APP_NAME}-egress
+          spec:
+            podSelector:
+              matchLabels:
+                app: ${APP_NAME}
+            policyTypes:
+              - Egress
+            egress:
+              # DNS
+              - to:
+                  - namespaceSelector: {}
+                ports:
+                  - protocol: UDP
+                    port: 53
+                  - protocol: TCP
+                    port: 53
+              # nginx proxies /v1/verify to the in-cluster verify-service.
+              # (The Verana resolver is called from the browser, not this pod.)
+              - to:
+                  - podSelector:
+                      matchLabels:
+                        app: verify-service
+                ports:
+                  - protocol: TCP
+                    port: 8080
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: ${APP_NAME}
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+          spec:
+            ingressClassName: nginx
+            tls:
+              - hosts:
+                  - ${HOST}
+                secretName: ${HOST}-cert
+            rules:
+              - host: ${HOST}
+                http:
+                  paths:
+                    - path: /
+                      pathType: Prefix
+                      backend:
+                        service:
+                          name: ${APP_NAME}
+                          port:
+                            number: 8000
+          EOF
+
+          kubectl rollout status deployment/${APP_NAME} -n "$NS" --timeout=300s
+          echo "Deployed: https://${HOST}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Forked Inji Verify UI" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Base:** official injistack/inji-verify-ui:0.18.1 + Verana trust-panel add-on (no fork)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **URL:** https://inji-verify-ui.mosip.testnet.verana.network" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** veranalabs/inji-verify-ui:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

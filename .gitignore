@@ -2,6 +2,11 @@
 node_modules/
 dist/
 data/
+.next/
 
 # Generated IDs
 */ids.env
+.DS_Store
+
+# Test artifacts
+.playwright-mcp/

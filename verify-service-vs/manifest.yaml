@@ -1,0 +1,103 @@
+# MOSIP Inji Verify — official verify-service + a throwaway postgres, deployed unmodified
+# (image injistack/inji-verify-service:0.18.1). Internal ClusterIP only; the Verana trust
+# portal (inji-verify-vs) calls it at http://verify-service:8080. The OpenID4VP env vars point
+# at the portal host but are unused by the /v1/verify/vc-verification path we rely on.
+#
+# Postgres is ephemeral (emptyDir): the vc-verification endpoint is stateless; the DB only
+# backs VP session flows, so losing it on restart is fine for the pilot.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-verify
+  labels: { app: postgres-verify }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-verify }
+  template:
+    metadata:
+      labels: { app: postgres-verify }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:13
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_PASSWORD, value: postgres }
+            - { name: POSTGRES_DB, value: inji_verify }
+          ports:
+            - containerPort: 5432
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d }
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: initdb
+          configMap: { name: verify-service-initdb }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-verify
+spec:
+  selector: { app: postgres-verify }
+  ports:
+    - { port: 5432, targetPort: 5432 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verify-service
+  labels: { app: verify-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: verify-service }
+  template:
+    metadata:
+      labels: { app: verify-service }
+    spec:
+      containers:
+        - name: verify-service
+          image: injistack/inji-verify-service:0.18.1
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1536Mi }
+          env:
+            - { name: active_profile_env, value: default }
+            - { name: DATABASE_HOST, value: postgres-verify }
+            - { name: DATABASE_PORT, value: "5432" }
+            - { name: DATABASE_NAME, value: inji_verify }
+            - { name: DATABASE_SCHEMA, value: verify }
+            - { name: DATABASE_USERNAME, value: postgres }
+            - { name: DATABASE_PASSWORD, value: postgres }
+            - { name: INJI_VP_REQUEST_LONG_POLLING_TIMEOUT, value: "55000" }
+            - { name: INJI_VP_SUBMISSION_BASE_URL, value: "https://inji-verify.mosip.testnet.verana.network/v1/verify" }
+            - { name: INJI_DID_VERIFY_URI, value: "did:web:inji-verify.mosip.testnet.verana.network:v1:verify" }
+            - { name: INJI_DID_VERIFY_PUBLIC_KEY_URI, value: "did:web:inji-verify.mosip.testnet.verana.network:verify#key-0" }
+            - { name: INJI_KEYSTORE_FILE_PASS, value: mosip }
+            - { name: INJI_VERIFY_REDIRECT_URI, value: "https://inji-verify.mosip.testnet.verana.network" }
+            - { name: INJI_VERIFY_RESPONSE_CODE_EXPIRY_TIME_IN_MINS, value: "5" }
+            - { name: INJI_VERIFY_CLAIMS_WITH_META_DATA, value: "_sd,_sd_alg,iss,cnf,sub,aud,exp,nbf,iat,cti" }
+          readinessProbe:
+            # verify-service runs under context path /v1/verify
+            httpGet: { path: /v1/verify/actuator/health, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verify-service
+spec:
+  selector: { app: verify-service }
+  ports:
+    - { port: 8080, targetPort: 8080 }
