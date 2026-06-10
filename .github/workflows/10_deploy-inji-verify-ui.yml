@@ -1,4 +1,4 @@
-name: 10_ Deploy forked Inji Verify UI (Verana trust panel)
+name: 10_ Deploy Inji Verify UI + Verana trust panel
 
 on:
   workflow_dispatch:
@@ -6,21 +6,16 @@ on:
     branches:
       - vs/testnet-mosip
     paths:
+      - 'inji-verify-ui/**'
       - '.github/workflows/10_deploy-inji-verify-ui.yml'
-
-env:
-  FORK_REPO: AirKyzzZ/inji-verify
-  FORK_BRANCH: feat/verana-trust-panel
 
 jobs:
   deploy-inji-verify-ui:
-    name: Build and deploy forked Inji Verify UI
+    name: Build and deploy Inji Verify UI (official image + Verana add-on)
     runs-on: ubuntu-latest
     steps:
-      - name: Clone the forked Inji Verify (with the Verana trust panel)
-        run: |
-          git clone --branch "$FORK_BRANCH" --depth 1 "https://github.com/${FORK_REPO}.git" inji-verify-fork
-          echo "Cloned ${FORK_REPO}@${FORK_BRANCH}"
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -31,11 +26,14 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_LOGIN }}
           password: ${{ secrets.DOCKER_HUB_PWD }}
 
+      # Builds FROM the official injistack/inji-verify-ui image and overlays only
+      # the Verana trust-panel add-on — no fork, no source copy.
       - name: Build and push UI image
         uses: docker/build-push-action@v6
         with:
-          context: ./inji-verify-fork/verify-ui
+          context: ./inji-verify-ui
           push: true
+          platforms: linux/amd64
           tags: |
             veranalabs/inji-verify-ui:${{ github.sha }}
             veranalabs/inji-verify-ui:mosip
@@ -172,6 +170,6 @@ jobs:
         run: |
           echo "## Forked Inji Verify UI" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Fork:** ${FORK_REPO}@${FORK_BRANCH} (official mosip/inji-verify + Verana trust panel)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Base:** official injistack/inji-verify-ui:0.18.1 + Verana trust-panel add-on (no fork)" >> "$GITHUB_STEP_SUMMARY"
           echo "- **URL:** https://inji-verify-ui.mosip.testnet.verana.network" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Image:** veranalabs/inji-verify-ui:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
