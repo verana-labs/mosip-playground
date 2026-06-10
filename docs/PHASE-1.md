@@ -116,11 +116,21 @@ Config (env on the UI deploy): `VERANA_RESOLVER_URL` (default `https://resolver.
   the ECS-ORG entry, service name from the ECS-SERVICE entry whose `id` equals the resolved DID;
   only `result: "VALID"` entries are used.
 
+## Display metadata (spec step 3) and what the resolver exposes
+
+The panel shows `organizationName`, `countryCode`, `registryId`, `ecosystem`. The spec also names
+`legalJurisdiction` and `permState`; on the live resolver:
+
+- **`legalJurisdiction`** = the ECS-ORG `countryCode` (`IN`) — already shown as **Country**. There is
+  no separate jurisdiction field in the ECS-ORG credential.
+- **`permState`** is **not returned** by the resolver's trust-question responses — Q2
+  `permission`/`permissionChain` are empty `{}` (even with `detail=full`) and there is no permissions
+  endpoint. The `authorized` flag, rendered as **Accredited issuer**, is the effective permission-state
+  signal the resolver exposes.
+
 ## Known limitations (testnet pilot)
 
-- The panel reads `organizationName`, `countryCode`, `registryId`, `ecosystem`; the spec also names
-  `legalJurisdiction` and `permState` — deferred.
-- No offline Claim 169 / PixelPass freshness fallback (spec step 5) — deferred.
+- No offline Claim 169 / PixelPass freshness fallback (spec step 5) — deferred to a later module.
 - `verify-service` runs with `skipStatusChecks: true` (revocation not checked in the demo).
 
 ## Phase 2 starting point
