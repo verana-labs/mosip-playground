@@ -1,0 +1,177 @@
+name: 10_ Deploy forked Inji Verify UI (Verana trust panel)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - vs/testnet-mosip
+    paths:
+      - '.github/workflows/10_deploy-inji-verify-ui.yml'
+
+env:
+  FORK_REPO: AirKyzzZ/inji-verify
+  FORK_BRANCH: feat/verana-trust-panel
+
+jobs:
+  deploy-inji-verify-ui:
+    name: Build and deploy forked Inji Verify UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the forked Inji Verify (with the Verana trust panel)
+        run: |
+          git clone --branch "$FORK_BRANCH" --depth 1 "https://github.com/${FORK_REPO}.git" inji-verify-fork
+          echo "Cloned ${FORK_REPO}@${FORK_BRANCH}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_LOGIN }}
+          password: ${{ secrets.DOCKER_HUB_PWD }}
+
+      - name: Build and push UI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inji-verify-fork/verify-ui
+          push: true
+          tags: |
+            veranalabs/inji-verify-ui:${{ github.sha }}
+            veranalabs/inji-verify-ui:mosip
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          APP_NAME="inji-verify-ui"
+          IMAGE="veranalabs/inji-verify-ui:${{ github.sha }}"
+          HOST="inji-verify-ui.mosip.testnet.verana.network"
+          echo "Namespace: $NS  Host: $HOST  Image: $IMAGE"
+
+          cat <<EOF | kubectl apply -n "$NS" -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${APP_NAME}
+            labels:
+              app: ${APP_NAME}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ${APP_NAME}
+            template:
+              metadata:
+                labels:
+                  app: ${APP_NAME}
+              spec:
+                containers:
+                  - name: inji-verify-ui
+                    image: ${IMAGE}
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: 8000
+                    resources:
+                      requests: { cpu: 20m, memory: 32Mi }
+                      limits: { cpu: 200m, memory: 128Mi }
+                    env:
+                      - name: VERANA_TRUST_ENABLED
+                        value: "true"
+                      - name: VERANA_RESOLVER_URL
+                        value: "https://resolver.${NETWORK:-testnet}.verana.network"
+                    readinessProbe:
+                      httpGet: { path: /, port: 8000 }
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${APP_NAME}
+          spec:
+            selector:
+              app: ${APP_NAME}
+            ports:
+              - port: 8000
+                targetPort: 8000
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: ${APP_NAME}-egress
+          spec:
+            podSelector:
+              matchLabels:
+                app: ${APP_NAME}
+            policyTypes:
+              - Egress
+            egress:
+              # DNS
+              - to:
+                  - namespaceSelector: {}
+                ports:
+                  - protocol: UDP
+                    port: 53
+                  - protocol: TCP
+                    port: 53
+              # nginx proxies /v1/verify to the in-cluster verify-service.
+              # (The Verana resolver is called from the browser, not this pod.)
+              - to:
+                  - podSelector:
+                      matchLabels:
+                        app: verify-service
+                ports:
+                  - protocol: TCP
+                    port: 8080
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: ${APP_NAME}
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+          spec:
+            ingressClassName: nginx
+            tls:
+              - hosts:
+                  - ${HOST}
+                secretName: ${HOST}-cert
+            rules:
+              - host: ${HOST}
+                http:
+                  paths:
+                    - path: /
+                      pathType: Prefix
+                      backend:
+                        service:
+                          name: ${APP_NAME}
+                          port:
+                            number: 8000
+          EOF
+
+          kubectl rollout status deployment/${APP_NAME} -n "$NS" --timeout=300s
+          echo "Deployed: https://${HOST}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Forked Inji Verify UI" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Fork:** ${FORK_REPO}@${FORK_BRANCH} (official mosip/inji-verify + Verana trust panel)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **URL:** https://inji-verify-ui.mosip.testnet.verana.network" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** veranalabs/inji-verify-ui:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
