@@ -101,8 +101,8 @@ spec:
             - { name: download_hsm_client, value: "false" }
             - { name: mosip_certify_domain_url, value: "https://inji-certify-vs.mosip.testnet.verana.network" }
           resources:
-            requests: { cpu: 200m, memory: 768Mi }
-            limits: { cpu: "1", memory: 2Gi }
+            requests: { cpu: 250m, memory: 1Gi }
+            limits: { cpu: "1500m", memory: 3Gi }
           volumeMounts:
             - { name: config, mountPath: /home/mosip/config }
             - { name: keystore, mountPath: /home/mosip/CERTIFY_PKCS12 }

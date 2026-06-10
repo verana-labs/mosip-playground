@@ -59,7 +59,7 @@ jobs:
           kubectl rollout restart deployment/inji-certify-did deployment/inji-certify -n "$NS" 2>/dev/null || true
           kubectl rollout status deployment/postgres-certify -n "$NS" --timeout=180s
           kubectl rollout status deployment/inji-certify-did -n "$NS" --timeout=180s
-          kubectl rollout status deployment/inji-certify -n "$NS" --timeout=600s
+          kubectl rollout status deployment/inji-certify -n "$NS" --timeout=360s
           echo "Inji Certify: https://inji-certify-vs.mosip.testnet.verana.network/v1/certify"
 
       - name: Debug Certify on failure
@@ -68,9 +68,11 @@ jobs:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
-          echo "::group::pods"; kubectl get pods -n "$NS" -l app=inji-certify -o wide; echo "::endgroup::"
-          echo "::group::describe"; kubectl describe deployment/inji-certify -n "$NS" | tail -40; echo "::endgroup::"
-          echo "::group::certify logs"; kubectl logs deployment/inji-certify -n "$NS" --tail=400 --all-containers 2>&1 | tail -250; echo "::endgroup::"
+          POD=$(kubectl get pods -n "$NS" -l app=inji-certify -o jsonpath='{.items[0].metadata.name}')
+          echo "::group::pod status"; kubectl get pods -n "$NS" -l app=inji-certify -o wide; echo "::endgroup::"
+          echo "::group::pod describe (state + events)"; kubectl describe pod "$POD" -n "$NS" | grep -A60 -iE "State|Events" | tail -50; echo "::endgroup::"
+          echo "::group::certify logs (current)"; kubectl logs "$POD" -n "$NS" --tail=400 2>&1 | tail -120; echo "::endgroup::"
+          echo "::group::certify logs (previous/crashed container)"; kubectl logs "$POD" -n "$NS" --previous --tail=400 2>&1 | tail -150; echo "::endgroup::"
 
       - name: Summary
         if: always()
