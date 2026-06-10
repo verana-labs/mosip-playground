@@ -60,11 +60,12 @@ jobs:
           kubectl delete deployment postgres-certify inji-certify -n "$NS" --ignore-not-found --wait=true --timeout=120s || true
           kubectl delete pvc inji-certify-pg inji-certify-keystore -n "$NS" --ignore-not-found --wait=false || true
           kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
-          # restart so config/DB changes are picked up
-          kubectl rollout restart deployment/inji-certify-did deployment/inji-certify -n "$NS" 2>/dev/null || true
+          # restart only the nginx did host so an updated did.json ConfigMap is picked up
+          # (certify + postgres were just recreated by the delete+apply, no restart needed)
+          kubectl rollout restart deployment/inji-certify-did -n "$NS" 2>/dev/null || true
           kubectl rollout status deployment/postgres-certify -n "$NS" --timeout=180s
           kubectl rollout status deployment/inji-certify-did -n "$NS" --timeout=180s
-          kubectl rollout status deployment/inji-certify -n "$NS" --timeout=360s
+          kubectl rollout status deployment/inji-certify -n "$NS" --timeout=420s
           echo "Inji Certify: https://inji-certify-vs.mosip.testnet.verana.network/v1/certify"
 
       - name: Debug Certify on failure

@@ -178,7 +178,7 @@ INSERT INTO certify.credential_config (
     '{"jwt": {"proof_signing_alg_values_supported": ["RS256", "ES256"]}}'::JSONB,
     '{"fullName": {"display": [{"name": "Full Name", "locale": "en"}]}, "dateOfBirth": {"display": [{"name": "Date of Birth", "locale": "en"}]}, "identifier": {"display": [{"name": "Identifier", "locale": "en"}]}}'::JSONB,
     NULL,
-    '[{"mosip.certify.mock.data-provider.csv.identifier-column": "id", "mosip.certify.mock.data-provider.csv.data-columns": "id,fullName,dateOfBirth,identifier", "mosip.certify.mock.data-provider.csv-registry-uri": "/home/mosip/config/resident_identity_data.csv"}]'::JSONB,
+    '[{"mosip.certify.mock.data-provider.csv.identifier-column": "identifier", "mosip.certify.mock.data-provider.csv.data-columns": "identifier,fullName,dateOfBirth", "mosip.certify.mock.data-provider.csv-registry-uri": "/home/mosip/config/resident_identity_data.csv"}]'::JSONB,
     ARRAY['revocation'],
     NULL, NULL, NOW(), NULL
 );
