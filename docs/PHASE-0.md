@@ -109,23 +109,37 @@ The namespace defaults to `mosip` in the workflow (`CHART_NAMESPACE:-mosip`), so
 secret is required. The only secret needed for the org deploy is `VS_DEMO_MNEMONIC` (plus the org-level
 `OVH_KUBECONFIG` scoped to this repo).
 
-**Inji issuer (Milestone B′): DEPLOYED + TRUSTED + authorized on testnet (2026-06-09).**
+**Inji issuer (Milestone B′): REAL Inji Certify ISSUING + verifiable + TRUSTED on testnet (2026-06-11).**
 
-- **DID:** `did:web:inji-certify-vs.mosip.testnet.verana.network` — a static `did:web` host (`inji-certify-vs/`,
-  nginx + ConfigMap, deployed by **workflow #7** on push) serving the DID document + the org-issued,
-  **holder-signed** ECS-SERVICE linked-VP.
-- **Q1 → TRUSTED** (the ECS-SERVICE chains to the TRUSTED org).
-- **Q2 → authorized** for the resident-id VTJSC (`…/vt/schemas-resident-id-jsc.json`) via ISSUER permission `746` (ACTIVE).
-- The issuer signing key is **controlled off-cluster** (so the linked-VP can be holder-signed, which the resolver
-  requires). Wiring the live **Inji Certify OID4VCI app + eSignet** issuance — which signs real credentials with that
-  key — is the documented follow-up.
+The static `did:web` stand-in was replaced with the **real MOSIP Inji Certify** (`injistack/inji-certify-with-plugins:0.14.0`)
+that actually issues the credential. Full real chain validated end to end:
+
+- **Issue** — real Inji Certify, real OID4VCI Pre-Authorized Code flow (no eSignet, Certify is its own
+  authorization server), DataProvider mode with the bundled CSV plugin, real **Ed25519Signature2020**
+  signing. Issues the *Foundational Resident ID* VC carrying `credentialSchema` → the Verana VTJSC and
+  the `VerifiableTrustCredential` type (the binding is config-only, in the `credential_config` Velocity
+  template — no fork).
+- **Verify** — the issued VC verifies in the real MOSIP `verify-service` (`allChecksSuccessful: true`),
+  its Ed25519 proof checked against the issuer's published `did:web` key.
+- **Q1 → TRUSTED**, **Q2 → authorized** for the resident-id VTJSC (ISSUER permission `746`, ACTIVE).
+
+Architecture (`inji-certify-vs/`, workflow #7): real Certify + postgres (both persistent PVCs, so the
+signing key is stable) + a tiny nginx serving the `did:web` document. The DID doc carries **two** keys:
+the holder-signed-VP key (`#key-1`, keeps the ECS-SERVICE linked-VP valid → Q1 TRUSTED) **and** Certify's
+signing key (`#eY-odk…`, verifies issued VCs). Ingress routes `/v1/certify/*` → Certify and
+`/.well-known/did.json` + `/vt/*` → nginx.
+
+Issuance flow (test harness at `~/.verana/issue-vc/issue.mjs`): `POST /v1/certify/pre-authorized-data`
+`{credential_configuration_id, claims:{identifier}}` → offer → `POST /oauth/token` (pre-auth grant) →
+access token → `POST /v1/certify/issuance/credential` with `{format: ldp_vc, credential_definition:
+{@context, type}, proof: {jwt}}` → the signed VC. Config + DB init live in `inji-certify-vs/certify/`.
 
 ## Known follow-up (not a Phase-0 blocker)
 
-**Live OID4VCI issuance through Inji Certify** needs an **eSignet** auth server (the credential
-endpoint validates an OIDC token; pre-auth endpoints are off by default), plus aligning certify's
-`data-provider-plugin.did-url` to the issuer DID and adding certify's signing key to the `did:web`
-doc. The issuer *identity* + the VTJSC binding are in place; only the live issuance pipeline remains.
+The CSV DataProvider is the sample data source (no real population registry on testnet) — the issuance,
+OID4VCI, and signing are all real Certify, exactly as MOSIP's own demos supply sample data. A production
+deployment would point the DataProvider at a real registry. (The earlier eSignet requirement was avoided
+entirely via the Pre-Authorized Code self-AS flow.)
 
 ## Phase 1 starting point
 
