@@ -106,9 +106,6 @@ spec:
     metadata:
       labels: { app: mock-identity-system }
     spec:
-      # compose runs this as user:root; the keymanager needs write access on first boot.
-      securityContext:
-        runAsUser: 0
       containers:
         - name: mock-identity-system
           image: mosipid/mock-identity-system:0.13.0
@@ -124,9 +121,11 @@ spec:
             - { name: MOSIP_ESIGNET_HOST, value: "esignet:8088" }
             # PSUT = individualId so the eSignet token sub matches certify's CSV lookup key.
             - { name: MOSIP_MOCK_IDA_KYC_PSUT_FIELD, value: "individualId" }
+            # Required: was present when the pod ran 1/1; dropping it crashlooped the pod.
+            - { name: MOSIP_MOCKIDENTITYSYSTEM_ESIGNET_ISSUER_ID, value: "https://esignet-vs.mosip.testnet.verana.network/v1/esignet" }
           resources:
             requests: { cpu: 100m, memory: 512Mi }
-            limits: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "1", memory: 1536Mi }
           readinessProbe:
             httpGet: { path: /v1/mock-identity-system/actuator/health, port: 8082 }
             initialDelaySeconds: 60
