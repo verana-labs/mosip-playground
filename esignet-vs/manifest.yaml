@@ -5,16 +5,11 @@
 #   eSignet API: https://esignet-vs.mosip.testnet.verana.network/v1/esignet
 #   OIDC UI:     https://esignet-ui-vs.mosip.testnet.verana.network
 # Touches nothing in phase 0/1.
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: esignet-pg
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 1Gi
+# NOTE: Postgres is EPHEMERAL on purpose (emptyDir, no PVC) — exactly like MOSIP's
+# official compose. The keymanager stores its master key in an in-container PKCS12
+# keystore while the alias lives in this DB; the two MUST share a lifecycle. Persisting
+# the DB but not the keystore caused "No such alias" crashloops on redeploy. Fresh DB +
+# fresh keystore each deploy keeps them in sync. (mock identities are reloaded post-deploy.)
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -49,7 +44,7 @@ spec:
         - name: initdb
           configMap: { name: esignet-initdb }
         - name: data
-          persistentVolumeClaim: { claimName: esignet-pg }
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -121,14 +116,12 @@ spec:
             - { name: MOSIP_ESIGNET_HOST, value: "esignet:8088" }
             # PSUT = individualId so the eSignet token sub matches certify's CSV lookup key.
             - { name: MOSIP_MOCK_IDA_KYC_PSUT_FIELD, value: "individualId" }
-            # Required: was present when the pod ran 1/1; dropping it crashlooped the pod.
-            - { name: MOSIP_MOCKIDENTITYSYSTEM_ESIGNET_ISSUER_ID, value: "https://esignet-vs.mosip.testnet.verana.network/v1/esignet" }
           resources:
             requests: { cpu: 100m, memory: 512Mi }
-            limits: { cpu: "1", memory: 1536Mi }
+            limits: { cpu: "1", memory: 2Gi }
           readinessProbe:
             httpGet: { path: /v1/mock-identity-system/actuator/health, port: 8082 }
-            initialDelaySeconds: 60
+            initialDelaySeconds: 110
             periodSeconds: 15
             failureThreshold: 20
 ---
@@ -183,7 +176,7 @@ spec:
             limits: { cpu: "1500m", memory: 3Gi }
           readinessProbe:
             httpGet: { path: /v1/esignet/actuator/health, port: 8088 }
-            initialDelaySeconds: 90
+            initialDelaySeconds: 120
             periodSeconds: 15
             failureThreshold: 40
 ---
