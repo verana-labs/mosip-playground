@@ -30,7 +30,7 @@ jobs:
             exit 1
           elif [ "$BRANCH" = "main" ]; then
             NETWORK="testnet"
-            VS_NAME="main"
+            VS_NAME="mosip"
           elif [[ "$BRANCH" =~ ^vs/(testnet|devnet)- ]]; then
             SUFFIX="${BRANCH#vs/}"
             NETWORK="${SUFFIX%%-*}"

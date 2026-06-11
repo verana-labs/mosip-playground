@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - vs/testnet-mosip
+      - main
     paths:
       - 'inji-certify-vs/**'
       - '.github/workflows/7_deploy-inji-certify-vs.yml'

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - vs/testnet-mosip
+      - main
     paths:
       - 'verify-service-vs/**'
       - '.github/workflows/9_deploy-verify-service.yml'
