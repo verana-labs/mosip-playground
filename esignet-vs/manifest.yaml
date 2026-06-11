@@ -98,12 +98,17 @@ metadata:
   labels: { app: mock-identity-system }
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels: { app: mock-identity-system }
   template:
     metadata:
       labels: { app: mock-identity-system }
     spec:
+      # compose runs this as user:root; the keymanager needs write access on first boot.
+      securityContext:
+        runAsUser: 0
       containers:
         - name: mock-identity-system
           image: mosipid/mock-identity-system:0.13.0
@@ -205,6 +210,9 @@ spec:
     metadata:
       labels: { app: esignet-ui }
     spec:
+      # compose runs oidc-ui as user:root; nginx needs to create /var/cache/nginx.
+      securityContext:
+        runAsUser: 0
       containers:
         - name: oidc-ui
           image: mosipid/oidc-ui:1.8.0
