@@ -28,16 +28,18 @@ jobs:
           printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Create ConfigMaps (eSignet config + DB init)
+      - name: Create ConfigMaps (DB init + oidc-ui nginx)
         env:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
-          kubectl create configmap esignet-config -n "$NS" \
-            --from-file=esignet-residentid.properties=esignet-vs/esignet/config/esignet-residentid.properties \
-            --dry-run=client -o yaml | kubectl apply -f -
+          # No app-config ConfigMap: the esignet image is self-contained (bundles its
+          # config). Only postgres init + the oidc-ui nginx.conf are mounted.
           kubectl create configmap esignet-initdb -n "$NS" \
             --from-file=esignet_init.sql=esignet-vs/db/esignet_init.sql \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap esignet-oidc-nginx -n "$NS" \
+            --from-file=nginx.conf=esignet-vs/oidc-ui/nginx.conf \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy
