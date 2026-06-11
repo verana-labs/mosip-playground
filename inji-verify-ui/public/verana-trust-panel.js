@@ -181,6 +181,8 @@
       inputs.schemaId ? resolveAuth(inputs.issuerDid, inputs.schemaId) : Promise.resolve(undefined),
     ]).then(function (r) {
       render(section, verdict(inputs.issuerDid, inputs.schemaId, r[0], r[1]));
+    }).catch(function (err) {
+      render(section, { v: "RESOLVER_UNAVAILABLE", issuerDid: inputs.issuerDid, schemaId: inputs.schemaId, err: String(err) });
     });
   }
 
