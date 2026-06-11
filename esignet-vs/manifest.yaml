@@ -167,22 +167,64 @@ spec:
             - containerPort: 8088
           env:
             - { name: container_user, value: mosip }
-            - { name: active_profile_env, value: "default,residentid" }
+            # Use the same profiles as the upstream docker-compose so all bundled
+            # application-default.properties and application-local.properties load
+            # from the JAR.  The "residentid" profile was incorrect — no such bundled
+            # file exists, and it caused SPRING_CONFIG_LOCATION to strip everything.
+            - { name: active_profile_env, value: "default,local" }
             - { name: plugin_name_env, value: "esignet-mock-plugin.jar" }
-            - { name: MOSIP_ESIGNET_MOCK_DOMAIN_URL, value: "http://mock-identity-system:8082" }
+            # Disable Spring Cloud Config — we have no config-server in this standalone deploy.
+            - { name: SPRING_CLOUD_CONFIG_ENABLED, value: "false" }
+            # scan-base-package is defined only in mosip-config/esignet-default.properties
+            # (served by a config-server in production).  Without a config-server it must
+            # be injected as an env var.  We include the mock integration package only.
+            - { name: MOSIP_ESIGNET_INTEGRATION_SCAN_BASE_PACKAGE, value: "io.mosip.esignet.mock.integration" }
+            # Mock plugin wiring
+            - { name: MOSIP_ESIGNET_INTEGRATION_AUDIT_PLUGIN, value: "LoggerAuditService" }
             - { name: MOSIP_ESIGNET_INTEGRATION_KEY_BINDER, value: "MockKeyBindingWrapperService" }
-            - { name: SPRING_CACHE_TYPE, value: redis }
+            - { name: MOSIP_ESIGNET_MOCK_DOMAIN_URL, value: "http://mock-identity-system:8082" }
+            # Domain URL — no trailing slash, no context path (Spring appends /v1/esignet).
+            - { name: MOSIP_ESIGNET_DOMAIN_URL, value: "https://esignet-vs.mosip.testnet.verana.network" }
+            # Database — override the application-local.properties localhost defaults.
+            # mosip.esignet.database.* feeds the datasource URL assembly.
+            # spring.datasource.username/password are set separately because
+            # application-default.properties hardcodes username=esignetuser and
+            # password=${db.dbuser.password} which would fail without a config-server.
+            - { name: MOSIP_ESIGNET_DATABASE_HOSTNAME, value: "postgres-esignet" }
+            - { name: MOSIP_ESIGNET_DATABASE_PORT, value: "5432" }
+            - { name: MOSIP_ESIGNET_DATABASE_NAME, value: "mosip_esignet" }
+            - { name: MOSIP_ESIGNET_DATABASE_USERNAME, value: "postgres" }
+            - { name: MOSIP_ESIGNET_DATABASE_PASSWORD, value: "postgres" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "postgres" }
+            - { name: SPRING_DATASOURCE_PASSWORD, value: "postgres" }
+            # Redis — override application-local.properties localhost defaults.
             - { name: SPRING_DATA_REDIS_HOST, value: redis-esignet }
-            - { name: SPRING_REDIS_PASSWORD, value: "" }
+            - { name: SPRING_DATA_REDIS_PORT, value: "6379" }
+            - { name: SPRING_DATA_REDIS_PASSWORD, value: "" }
+            # Kafka disabled.
             - { name: KAFKA_ENABLED, value: "false" }
             - { name: SPRING_AUTOCONFIGURE_EXCLUDE, value: "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration" }
-            - { name: SPRING_CONFIG_LOCATION, value: /home/mosip/config/ }
-            - { name: SPRING_CONFIG_NAME, value: esignet }
+            # PKCS12 keystore (no SoftHSM).
+            - { name: MOSIP_KERNEL_KEYMANAGER_HSM_KEYSTORE_TYPE, value: "PKCS12" }
+            - { name: MOSIP_KERNEL_KEYMANAGER_HSM_CONFIG_PATH, value: "/home/mosip/ESIGNET_PKCS12/local.p12" }
+            - { name: MOSIP_KERNEL_KEYMANAGER_HSM_KEYSTORE_PASS, value: "local" }
+            # Captcha off for the pilot.
+            - { name: MOSIP_ESIGNET_CAPTCHA_REQUIRED, value: "" }
+            # Credential scope for the resident-id VC.
+            - { name: MOSIP_ESIGNET_SUPPORTED_CREDENTIAL_SCOPES, value: "{'resident_id_vc_ldp'}" }
+            - { name: MOSIP_ESIGNET_CREDENTIAL_SCOPE_RESOURCE_MAPPING, value: "{'resident_id_vc_ldp': 'https://esignet-vs.mosip.testnet.verana.network/v1/esignet/vci/credential'}" }
+            # OIDC login UI base URL.
+            - { name: MOSIP_ESIGNET_UI_BASE_URL, value: "https://esignet-ui-vs.mosip.testnet.verana.network" }
+            # Security — disable Keycloak JWT validation (no Keycloak in standalone deploy).
+            - { name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI, value: "" }
+            - { name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI, value: "" }
+            - { name: MOSIP_ESIGNET_SECURITY_AUTH_POST_URLS, value: "{}" }
+            - { name: MOSIP_ESIGNET_SECURITY_AUTH_PUT_URLS, value: "{}" }
+            - { name: MOSIP_ESIGNET_SECURITY_AUTH_GET_URLS, value: "{}" }
           resources:
             requests: { cpu: 250m, memory: 1Gi }
             limits: { cpu: "1500m", memory: 3Gi }
           volumeMounts:
-            - { name: config, mountPath: /home/mosip/config }
             - { name: keystore, mountPath: /home/mosip/ESIGNET_PKCS12 }
           readinessProbe:
             httpGet: { path: /v1/esignet/actuator/health, port: 8088 }
@@ -190,8 +232,6 @@ spec:
             periodSeconds: 15
             failureThreshold: 40
       volumes:
-        - name: config
-          configMap: { name: esignet-config }
         - name: keystore
           persistentVolumeClaim: { claimName: esignet-keystore }
 ---
@@ -224,7 +264,11 @@ spec:
             - containerPort: 3000
           env:
             - { name: container_user, value: mosip }
-            - { name: ESIGNET_API_URL, value: "https://esignet-vs.mosip.testnet.verana.network" }
+            # DEFAULT_WELLKNOWN is read at container start by configure_start.sh and
+            # written into env-config.js via env.env.  Supply it explicitly so the UI
+            # shows the correct well-known endpoint links for our deployment.
+            # Value is URL-encoded JSON matching the upstream docker-compose default.
+            - { name: DEFAULT_WELLKNOWN, value: "%5B%7B%22name%22%3A%22OpenID%20Configuration%22%2C%22value%22%3A%22%2F.well-known%2Fopenid-configuration%22%7D%2C%7B%22name%22%3A%22Jwks%20Json%22%2C%22value%22%3A%22%2F.well-known%2Fjwks.json%22%7D%2C%7B%22name%22%3A%22Authorization%20Server%22%2C%22value%22%3A%22%2F.well-known%2Foauth-authorization-server%22%7D%5D" }
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { cpu: 200m, memory: 512Mi }
