@@ -2,14 +2,16 @@
 //
 // Additive add-on injected on top of the official, unmodified Inji Web wallet image
 // (injistack/inji-web). It changes nothing in MOSIP's OpenID4VP flow: it hooks the
-// wallet's fetch, and when a relying party requests a presentation it asks the Verana
-// Trust Resolver "is this verifier a Trusted Verifiable Service (Q1) with an active
-// VERIFIER accreditation for this credential (Q3)?" — shows the verdict on the consent
-// screen and DEFAULT-BLOCKS the share before any vp_token can leave the wallet.
+// wallet's HTTP layer — BOTH window.fetch AND XMLHttpRequest, because Inji Web drives
+// the present flow over axios (XHR), so a fetch-only gate would never fire — and when a
+// relying party requests a presentation it asks the Verana Trust Resolver "is this
+// verifier a Trusted Verifiable Service (Q1) with an active VERIFIER accreditation for
+// this credential (Q3)?" — shows the verdict on the consent screen and DEFAULT-BLOCKS
+// the share before any vp_token can leave the wallet.
 //
 // Hard gate: PATCH /wallets/*/presentations/{id} (which assembles + dispatches the
-// vp_token) is intercepted and refused unless the verdict for THAT presentation is
-// TRUSTED_AUTHORIZED. Security posture (hardened after audit):
+// vp_token) is intercepted on both transports and refused unless the verdict for THAT
+// presentation is TRUSTED_AUTHORIZED. Security posture (hardened after audit):
 //   * Gates are keyed by presentationId — verifier A's verdict can never authorize
 //     verifier B's dispatch; an unknown/missed presentation fails CLOSED.
 //   * URL matching is on a normalized pathname (query/hash/trailing-slash tolerant,
@@ -128,39 +130,113 @@
     catch (e) { return String(url).split("?")[0].split("#")[0].replace(/\/+$/, ""); }
   }
 
-  // --- Fetch hook: capture the verifier on POST, hard-block the share on PATCH ---
+  // --- Transport-agnostic predicates + handlers (shared by the fetch and XHR hooks) ---
+  // Inji Web drives the present flow over axios (XMLHttpRequest), NOT fetch, so BOTH
+  // transports must be hooked — a fetch-only gate is a no-op on the real wallet and the
+  // vp_token leaves ungated. The two endpoints (confirmed against mimoto):
+  //   POST  /wallets/{id}/presentations        -> returns the mimoto-validated verifier
+  //   PATCH /wallets/{id}/presentations/{pid}   -> assembles + dispatches the vp_token
+  function isPostPresentations(method, path) {
+    return method === "POST" && /\/wallets\/[^/]+\/presentations$/i.test(path);
+  }
+  function isPatchPresentation(method, path) {
+    return method === "PATCH" && /\/wallets\/[^/]+\/presentations\/[^/]+$/i.test(path);
+  }
+  function captureVerifier(d) {
+    if (d && d.verifier) startGate(d.verifier, d.presentationId || d.presentation_id);
+  }
+  // Resolve the gate decision for a dispatch path. Fails CLOSED: an unknown presentation,
+  // a pid mismatch, or an unresolved/non-authorized verdict all deny.
+  function decideDispatch(path) {
+    var pid = path.split("/").pop();
+    var g = gates[pid];
+    var promise = g && g.promise ? g.promise : Promise.resolve(null);
+    return promise.then(function (v) {
+      return { allowed: !!(g && g.presentationId === pid && isAllowed(v)), verdict: v };
+    });
+  }
+
+  // --- fetch hook ---
   window.fetch = function (input, init) {
     var url = typeof input === "string" ? input : (input && input.url) || "";
     var method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
     var path = pathOf(url);
 
-    // mimoto returns the resolved+validated verifier here
-    if (method === "POST" && /\/wallets\/[^/]+\/presentations$/i.test(path)) {
+    if (isPostPresentations(method, path)) {
       return origFetch(input, init).then(function (res) {
-        try {
-          res.clone().json().then(function (d) {
-            if (d && d.verifier) startGate(d.verifier, d.presentationId || d.presentation_id);
-          }).catch(function () {});
-        } catch (e) {}
+        try { res.clone().json().then(captureVerifier).catch(function () {}); } catch (e) {}
         return res;
       });
     }
 
-    // the single chokepoint that assembles + sends the vp_token — gate it by presentationId
-    if (method === "PATCH" && /\/wallets\/[^/]+\/presentations\/[^/]+$/i.test(path)) {
-      var pid = path.split("/").pop();
-      var g = gates[pid];
-      var decide = g && g.promise ? g.promise : Promise.resolve({ v: "RESOLVER_UNAVAILABLE" });
-      return decide.then(function (v) {
-        if (g && g.presentationId === pid && isAllowed(v)) return origFetch(input, init);
+    if (isPatchPresentation(method, path)) {
+      return decideDispatch(path).then(function (d) {
+        if (d.allowed) return origFetch(input, init);
         return new Response(
-          JSON.stringify({ errors: [{ errorCode: "verana_blocked", errorMessage: blockMsg(v) }] }),
+          JSON.stringify({ errors: [{ errorCode: "verana_blocked", errorMessage: blockMsg(d.verdict) }] }),
           { status: 403, headers: { "Content-Type": "application/json" } }
         );
       });
     }
 
     return origFetch(input, init);
+  };
+
+  // --- XMLHttpRequest hook (axios) — same capture + hard-block, fail-closed ---
+  var origXhrOpen = XMLHttpRequest.prototype.open;
+  var origXhrSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.__veranaMethod = String(method || "GET").toUpperCase();
+    this.__veranaPath = pathOf(url);
+    return origXhrOpen.apply(this, arguments);
+  };
+
+  // Synthesize a 403 on the instance WITHOUT sending — read-only XHR fields are shadowed
+  // by own getters, then the standard completion events are fired so axios rejects cleanly.
+  function blockXhr(xhr, verdict) {
+    var payload = JSON.stringify({ errors: [{ errorCode: "verana_blocked", errorMessage: blockMsg(verdict) }] });
+    function def(name, val) { try { Object.defineProperty(xhr, name, { configurable: true, get: function () { return val; } }); } catch (e) {} }
+    def("readyState", 4);
+    def("status", 403);
+    def("statusText", "Forbidden");
+    def("responseText", payload);
+    def("response", payload);
+    def("responseURL", "");
+    // dispatchEvent invokes the on* property handlers too, so we do NOT also call
+    // xhr.onreadystatechange manually — that would double-fire and is axios-version-fragile.
+    xhr.dispatchEvent(new Event("readystatechange"));
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+  }
+
+  XMLHttpRequest.prototype.send = function () {
+    var xhr = this, method = xhr.__veranaMethod, path = xhr.__veranaPath || "";
+
+    if (isPostPresentations(method, path)) {
+      xhr.addEventListener("load", function () {
+        try { captureVerifier(JSON.parse(xhr.responseText)); } catch (e) {}
+      });
+      return origXhrSend.apply(xhr, arguments);
+    }
+
+    if (isPatchPresentation(method, path)) {
+      var args = arguments;
+      // Defer the real send until the verdict resolves (mirrors the fetch path); only a
+      // confirmed TRUSTED_AUTHORIZED gate for THIS presentation lets the vp_token leave.
+      // The .catch guarantees the deny path always terminates the XHR (a synthetic 403)
+      // even if anything above throws — the real send already returned, so failing here
+      // must never leave the request stranded/hung. Still fail-closed: never sends.
+      decideDispatch(path).then(function (d) {
+        if (d.allowed) origXhrSend.apply(xhr, args);
+        else blockXhr(xhr, d.verdict);
+      }).catch(function (e) {
+        blockXhr(xhr, { v: "RESOLVER_UNAVAILABLE", err: String(e) });
+      });
+      return;
+    }
+
+    return origXhrSend.apply(xhr, arguments);
   };
 
   // --- Verdict panel (rendered into the consent modal) -------------------------
@@ -179,6 +255,13 @@
       esc(label) + '</span><span style="word-break:break-all;color:#1f2937">' + esc(value) + "</span></div>";
   }
 
+  // A stable signature for the currently rendered panel — lets tryRender() skip a
+  // redundant re-render. Without this, re-rendering mutates the DOM, which re-fires the
+  // MutationObserver below, which calls tryRender again -> infinite loop that hangs the tab.
+  function renderKey(g) { return (g.presentationId || "") + "|" + ((g.verdict && g.verdict.v) || ""); }
+
+  // key is applied via setAttribute by the caller (NOT interpolated here) — esc() is text-safe
+  // only, never attribute-safe, and the panel's XSS invariant forbids dynamic attribute sinks.
   function panelHtml(report, verifier) {
     var s = STYLES[report.v] || STYLES.RESOLVER_UNAVAILABLE;
     var id = report.id || {};
@@ -200,22 +283,28 @@
     );
   }
 
+  // Inji Web renders BOTH a desktop and a mobile (sm:hidden) consent button — toggle every
+  // matching button so the share is disabled regardless of which one is visible.
   function gateButton(allowed, report) {
-    var btn = document.querySelector('[data-testid="btn-consent-share"]');
-    if (!btn) return;
-    if (allowed) {
-      btn.disabled = false;
-      btn.removeAttribute("data-verana-blocked");
-      btn.style.removeProperty("opacity");
-      btn.style.removeProperty("cursor");
-    } else {
-      btn.disabled = true;
-      btn.setAttribute("data-verana-blocked", report.v);
-      btn.style.opacity = "0.5";
-      btn.style.cursor = "not-allowed";
-      btn.title = blockMsg(report);
+    var btns = document.querySelectorAll('[data-testid="btn-consent-share"]');
+    for (var i = 0; i < btns.length; i++) {
+      var btn = btns[i];
+      if (allowed) {
+        btn.disabled = false;
+        btn.removeAttribute("data-verana-blocked");
+        btn.style.removeProperty("opacity");
+        btn.style.removeProperty("cursor");
+      } else {
+        btn.disabled = true;
+        btn.setAttribute("data-verana-blocked", report.v);
+        btn.style.opacity = "0.5";
+        btn.style.cursor = "not-allowed";
+        btn.title = blockMsg(report);
+      }
     }
   }
+
+  var observer; // declared up-front so tryRender can pause it across its own mutations
 
   function tryRender() {
     if (!activeGate || !activeGate.verdict) return;
@@ -223,21 +312,39 @@
     var modal = card || document.querySelector('[data-testid="ModalWrapper-Outer-Container"]');
     if (!modal) return;
     var existing = document.getElementById("verana-vp-gate");
-    var html = panelHtml(activeGate.verdict, activeGate.verifier);
-    if (existing) {
-      existing.outerHTML = html;
-    } else {
-      var holder = document.createElement("div");
-      holder.innerHTML = html;
-      var node = holder.firstChild;
-      var anchor = document.querySelector('[data-testid="btn-consent-share"]');
-      if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(node, anchor);
-      else (card || modal).appendChild(node);
+    var key = renderKey(activeGate);
+    // Already showing this exact verdict for this presentation -> only (idempotently)
+    // re-assert the button state and bail. Prevents the observer feedback loop.
+    if (existing && existing.getAttribute("data-verana-key") === key) {
+      gateButton(isAllowed(activeGate.verdict), activeGate.verdict);
+      return;
     }
-    gateButton(isAllowed(activeGate.verdict), activeGate.verdict);
+    var html = panelHtml(activeGate.verdict, activeGate.verifier);
+    // Pause observation while WE mutate, so our own DOM writes don't re-trigger tryRender.
+    if (observer) observer.disconnect();
+    try {
+      if (existing) {
+        existing.outerHTML = html;
+      } else {
+        var holder = document.createElement("div");
+        holder.innerHTML = html;
+        var node = holder.firstChild;
+        // Render into the visible modal body. Anchoring next to btn-consent-share fails:
+        // the first match is the sm:hidden MOBILE button, so the panel ends up invisible.
+        var host = card || modal;
+        host.insertBefore(node, host.firstChild);
+      }
+      // Set the idempotency key via setAttribute (never string-interpolated) so a
+      // presentationId containing a quote can't break out of the attribute context.
+      var panel = document.getElementById("verana-vp-gate");
+      if (panel) panel.setAttribute("data-verana-key", key);
+      gateButton(isAllowed(activeGate.verdict), activeGate.verdict);
+    } finally {
+      if (observer) observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
   }
 
   // --- Re-render whenever the consent modal (re)appears in the DOM --------------
-  var observer = new MutationObserver(function () { tryRender(); });
+  observer = new MutationObserver(function () { tryRender(); });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 })();

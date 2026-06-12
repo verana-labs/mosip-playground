@@ -4,8 +4,9 @@ Design + plan + state for Phase 2. Spec: `verana-labs/integration-sandbox` →
 `mosip/phase-2-holder-verifier-protection.md`. Builds on [PHASE-0](PHASE-0.md) (the issuer, schema
 and VTJSC) and [PHASE-1](PHASE-1.md) (the resolver client + add-on pattern).
 
-> Status: **DESIGN — not yet implemented.** This doc is the agreed architecture and the de-risk-first
-> build plan. It becomes the implementation/runbook/state doc as we build (same as PHASE-0/1).
+> Status: **VALIDATED LOCALLY (end-to-end).** All five build steps (2a–2f) are done and proven against
+> the live testnet. The holder-protection allow AND block paths run in a real local Inji Web wallet
+> holding a real, downloaded resident-id credential. See **Validation results** at the bottom.
 
 ## TL;DR
 
@@ -144,3 +145,54 @@ holder consents:   credential selection (CredentialRequestModal) → mimoto buil
 - `inji-web/` add-on: `Dockerfile` (`FROM injistack/inji-web`) + `public/verana-vp-gate.js` +
   appended `VERANA_RESOLVER_URL` + `VERANA_VTJSC_ID` in the image `.env`.
 - VERIFIER registration: reuse `verifier-*-vs/scripts/` logic against the inji-verify `did:web`.
+
+## Validation results (local, against live testnet)
+
+Validated end-to-end in a real local Inji Web wallet (`injistack/inji-web:0.16.0`, Google-logged-in,
+holding a real downloaded resident-id credential) pointed at the live testnet certify, eSignet, verifier
+and resolver. All three spec paths confirmed in-browser.
+
+**Credential download (2b/2c).** The wallet downloads the Foundational Resident ID over the real
+OID4VCI auth-code flow: inji-web → our eSignet (`esignet-vs`, mock OTP) → our certify
+(`inji-certify-vs`). Three config bugs were found and fixed to make this work:
+
+- eSignet rejected the VC scope because of a stale build, not config — a *pure* credential scope
+  (`resident_id_vc_ldp`, no `openid`) validates fine; mixed scopes are rejected by design. `esignet-vs`
+  now registers it; workflow #11 resets the full stack (keystore↔DB lifecycle), re-registers the
+  `wallet-demo` client, and smoke-tests the scope.
+- The mock identities were silently rejected: `mock-identity-system`'s schema requires a **numeric**
+  `individualId` (`^[0-9]{5,19}$`) plus a set of required fields. Identities + the certify CSV are now
+  numeric (`7841223190` Asha, OTP `111111`); the load step fails loudly on errors.
+- certify returned `401 invalid_token`: it validates the access-token `iss` with an exact-match
+  `JwtIssuerValidator`, and our eSignet's issuer has **no** `/v1/esignet` suffix. `authn.issuer-uri`
+  dropped the suffix.
+
+**Gate (2e/2f).** The `verana-vp-gate.js` add-on was made to actually function on the real wallet —
+the committed version hooked only `window.fetch`, but **Inji Web drives the present flow over axios
+(XMLHttpRequest)**, so the gate was a no-op and the vp_token left ungated. The gate now hooks both
+transports (`POST /wallets/*/presentations` captures the mimoto-validated verifier; `PATCH
+/wallets/*/presentations/{id}` is the vp_token chokepoint, hard-blocked unless the verdict is
+`TRUSTED_AUTHORIZED`). Two more fixes: a MutationObserver/`tryRender` feedback loop that hung the tab
+once the gate fired (idempotency key + observer pause), and panel placement (the first
+`btn-consent-share` is the `sm:hidden` mobile button, so render into the modal body and toggle all
+share buttons). Reviewed by `code-reviewer` (no leak; fail-closed holds on both transports) and hardened
+per its findings (XHR deny-path `.catch`, no double-fired `readystatechange`, `data-verana-key` set via
+`setAttribute` not string interpolation).
+
+The three spec paths, live in the wallet:
+
+| Path | Verifier DID | Q1 | Q3 | Gate verdict | Share |
+|---|---|---|---|---|---|
+| Trusted + authorized | `did:web:inji-verify…:v1:verify` | TRUSTED | authorized | `TRUSTED_AUTHORIZED` | **allowed** (PATCH 200, vp_token dispatched) |
+| Wrong-scope (issuer, not verifier) | `did:web:inji-certify-vs…` | TRUSTED | not authorized | `TRUSTED_NOT_AUTHORIZED` | **blocked** ("blocked to prevent over-collection") |
+| Unknown | unregistered DID | no eval | — | `UNTRUSTED` | **blocked** (verdict confirmed live; same block mechanism) |
+
+The allow and wrong-scope paths were driven as full present flows in the wallet (the wrong-scope request
+was signed by certify's `#key-1` and validated by mimoto, then blocked by the gate). The allow panel
+renders the full org identity from the ECS credentials (MOSIP Pilot Authority · Inji Verify - Resident
+ID Verifier · IN · IN-MOSIP-PILOT-001).
+
+**Deploy decision.** Validated locally first per the project's local-first workflow; a full k8s wallet
+deploy (mimoto + postgres + issuer config + Google OAuth redirect) is a separate, larger step — the
+add-on (`inji-web-vs/`) and the eSignet/certify fixes are deployed; the wallet itself was exercised
+locally.
