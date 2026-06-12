@@ -172,7 +172,7 @@ INSERT INTO certify.credential_config (
     'EdDSA',
     'Ed25519Signature2020',
     NULL,
-    '[{"name": "Foundational Resident ID", "locale": "en", "background_color": "#0b5cab", "text_color": "#FFFFFF"}]'::JSONB,
+    '[{"logo": {"url": "https://raw.githubusercontent.com/verana-labs/mosip-playground/main/inji-web-vs/public/cobrand.png", "alt_text": "MOSIP x Verana"}, "name": "Foundational Resident ID", "locale": "en", "background_color": "#0b5cab", "text_color": "#FFFFFF"}]'::JSONB,
     ARRAY['fullName','dateOfBirth','identifier'],
     'resident_id_vc_ldp',
     ARRAY['did:jwk'],
