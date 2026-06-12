@@ -171,6 +171,14 @@ spec:
             - { name: SPRING_AUTOCONFIGURE_EXCLUDE, value: "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration" }
             # Our only addition vs compose: the public domain (compose runs on localhost).
             - { name: MOSIP_ESIGNET_DOMAIN_URL, value: "https://esignet-vs.mosip.testnet.verana.network" }
+            # Verana: register our OID4VCI credential scope so /authorize accepts resident_id_vc_ldp.
+            # These are SpEL values (#{${...}}) that REPLACE (not append), so the bundled default
+            # mosip_identity_vc_ldp is re-included. scope-resource-mapping sets the access-token aud to
+            # .../v1/esignet/vci/credential, which matches certify's allowed-audiences => certify accepts it.
+            - name: MOSIP_ESIGNET_SUPPORTED_CREDENTIAL_SCOPES
+              value: "{'mosip_identity_vc_ldp', 'resident_id_vc_ldp'}"
+            - name: MOSIP_ESIGNET_CREDENTIAL_SCOPE_RESOURCE_MAPPING
+              value: "{ 'mosip_identity_vc_ldp': '${mosip.esignet.domain.url}${server.servlet.path}/vci/credential', 'resident_id_vc_ldp': '${mosip.esignet.domain.url}${server.servlet.path}/vci/credential' }"
           resources:
             requests: { cpu: 250m, memory: 1Gi }
             limits: { cpu: "1500m", memory: 3Gi }
