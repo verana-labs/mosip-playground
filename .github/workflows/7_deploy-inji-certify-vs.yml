@@ -61,15 +61,20 @@ jobs:
           # restart only the nginx did host so an updated did.json ConfigMap is picked up
           kubectl rollout restart deployment/inji-certify-did -n "$NS" 2>/dev/null || true
           kubectl rollout status deployment/postgres-certify -n "$NS" --timeout=180s
-          # Verana: the FoundationalResidentID credential display must carry a non-null logo, else
-          # Inji Web / mimoto rejects the well-known (RESIDENT-APP-041). The postgres PVC is persistent,
-          # so certify_init.sql will not re-run on redeploy — patch the live row idempotently, then
-          # recreate certify so its well-known serves the refreshed credential_configurations_supported.
-          PGPOD=$(kubectl get pods -n "$NS" -l app=postgres-certify -o jsonpath='{.items[0].metadata.name}')
-          kubectl exec -n "$NS" "$PGPOD" -- psql -U postgres -d postgres -c "UPDATE certify.credential_config SET display = '[{\"logo\": {\"url\": \"https://raw.githubusercontent.com/verana-labs/mosip-playground/main/inji-web-vs/public/cobrand.png\", \"alt_text\": \"MOSIP x Verana\"}, \"name\": \"Foundational Resident ID\", \"locale\": \"en\", \"background_color\": \"#0b5cab\", \"text_color\": \"#FFFFFF\"}]'::jsonb WHERE credential_config_key_id = 'FoundationalResidentID';"
-          kubectl delete deployment inji-certify -n "$NS" --ignore-not-found --wait=true --timeout=120s || true
-          kubectl apply -n "$NS" -f inji-certify-vs/manifest.yaml
           kubectl rollout status deployment/inji-certify-did -n "$NS" --timeout=180s
+          kubectl rollout status deployment/inji-certify -n "$NS" --timeout=420s
+          # Verana: the FoundationalResidentID credential display must carry a non-null logo, else
+          # Inji Web / mimoto rejects the well-known (RESIDENT-APP-041). The postgres PVC is persistent
+          # so certify_init.sql will not re-run (and the DB is 'inji_certify', not 'postgres'). Wait for
+          # the table, patch idempotently (non-fatal: a fresh DB already has the logo from init.sql), then
+          # restart certify (Recreate strategy => no keystore-PVC multi-attach) to refresh its config cache.
+          PGPOD=$(kubectl get pods -n "$NS" -l app=postgres-certify -o jsonpath='{.items[0].metadata.name}')
+          for i in $(seq 1 24); do
+            kubectl exec -n "$NS" "$PGPOD" -- psql -U postgres -d inji_certify -tAc "SELECT 1 FROM certify.credential_config LIMIT 1" >/dev/null 2>&1 && break
+            echo "waiting for certify.credential_config ($i)"; sleep 5
+          done
+          kubectl exec -n "$NS" "$PGPOD" -- psql -U postgres -d inji_certify -c "UPDATE certify.credential_config SET display = '[{\"logo\": {\"url\": \"https://raw.githubusercontent.com/verana-labs/mosip-playground/main/inji-web-vs/public/cobrand.png\", \"alt_text\": \"MOSIP x Verana\"}, \"name\": \"Foundational Resident ID\", \"locale\": \"en\", \"background_color\": \"#0b5cab\", \"text_color\": \"#FFFFFF\"}]'::jsonb WHERE credential_config_key_id = 'FoundationalResidentID';" || echo "display UPDATE non-fatal (fresh DB already carries the logo)"
+          kubectl rollout restart deployment/inji-certify -n "$NS"
           kubectl rollout status deployment/inji-certify -n "$NS" --timeout=420s
           echo "Inji Certify: https://inji-certify-vs.mosip.testnet.verana.network/v1/certify"
 

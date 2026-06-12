@@ -84,6 +84,9 @@ metadata:
   labels: { app: inji-certify }
 spec:
   replicas: 1
+  # Recreate: the RWO keystore PVC can only attach to one pod; a rolling update would
+  # multi-attach-deadlock. Recreate terminates the old pod (detaching the volume) first.
+  strategy: { type: Recreate }
   selector:
     matchLabels: { app: inji-certify }
   template:
