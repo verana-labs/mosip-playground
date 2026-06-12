@@ -42,6 +42,19 @@ jobs:
             --from-file=nginx.conf=esignet-vs/oidc-ui/nginx.conf \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      # The keymanager stores its master key in an in-container PKCS12 keystore while the
+      # key ALIAS lives in postgres. Replacing only the esignet pod (e.g. an env-only change)
+      # leaves the old alias in the surviving DB -> KER-KMA-004 "No such alias" crashloop.
+      # Recreating the whole stack keeps DB + keystores in sync (MOSIP's compose is
+      # all-ephemeral for the same reason). Identities + the OIDC client are reloaded below.
+      - name: Reset eSignet stack (keystore<->DB lifecycle)
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          kubectl delete deployment esignet mock-identity-system postgres-esignet redis-esignet -n "$NS" --ignore-not-found
+          kubectl wait --for=delete pod -l 'app in (esignet,mock-identity-system,postgres-esignet,redis-esignet)' -n "$NS" --timeout=180s || true
+
       - name: Deploy
         env:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
@@ -70,6 +83,33 @@ jobs:
               -H 'Content-Type: application/json' \
               -d "{\"requestTime\":\"$NOW\",\"request\":$rec}" || true
           done
+
+      # The stack reset wipes registered OIDC clients with the DB — re-register the wallet
+      # client every deploy. client-mgmt is csrf-exempt and unprotected under the bundled
+      # local profile (same as upstream compose); the payload holds only the PUBLIC key.
+      - name: Register wallet-demo OIDC client
+        run: |
+          BASE="https://esignet-vs.mosip.testnet.verana.network/v1/esignet"
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          BODY=$(jq -n --arg t "$NOW" --slurpfile r esignet-vs/clients/wallet-demo.json '{requestTime:$t, request:$r[0]}')
+          RESP=$(curl -sf -X POST "$BASE/client-mgmt/oidc-client" -H 'Content-Type: application/json' -d "$BODY")
+          echo "$RESP"
+          echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
+
+      # Regression guard for the VC scope: a pure credential scope must validate.
+      # /authorization/** requires CSRF; Spring Security 6 XOR tokens — the header must
+      # carry the token from the /csrf/token response BODY, not the raw cookie value.
+      - name: Smoke test (resident_id_vc_ldp accepted)
+        run: |
+          BASE="https://esignet-vs.mosip.testnet.verana.network/v1/esignet"
+          CJ=$(mktemp)
+          XSRF=$(curl -sf -c "$CJ" "$BASE/csrf/token" | jq -r .token)
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          RESP=$(curl -sf -b "$CJ" -H "X-XSRF-TOKEN: $XSRF" -X POST "$BASE/authorization/v2/oauth-details" \
+            -H 'Content-Type: application/json' \
+            -d "{\"requestTime\":\"$NOW\",\"request\":{\"clientId\":\"wallet-demo\",\"scope\":\"resident_id_vc_ldp\",\"responseType\":\"code\",\"redirectUri\":\"http://localhost:3004/redirect\",\"display\":\"page\",\"prompt\":\"consent\",\"acrValues\":\"mosip:idp:acr:generated-code\",\"nonce\":\"smoke\",\"state\":\"smoke\"}}")
+          echo "$RESP" | jq -c '{errors}'
+          echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
 
       - name: Debug on failure
         if: failure()

@@ -9,7 +9,10 @@
 # official compose. The keymanager stores its master key in an in-container PKCS12
 # keystore while the alias lives in this DB; the two MUST share a lifecycle. Persisting
 # the DB but not the keystore caused "No such alias" crashloops on redeploy. Fresh DB +
-# fresh keystore each deploy keeps them in sync. (mock identities are reloaded post-deploy.)
+# fresh keystore each deploy keeps them in sync — workflow #11 enforces this by DELETING
+# esignet/mock-identity/postgres/redis before apply (a plain apply that replaces only the
+# esignet pod hits the same crashloop). Mock identities + the wallet-demo OIDC client are
+# reloaded post-deploy.
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -1,0 +1,39 @@
+{
+  "clientId": "wallet-demo",
+  "clientName": "Inji Verana Wallet",
+  "publicKey": {
+    "kty": "RSA",
+    "n": "5oxeUxbvsd_RgiKWpYxwek2BkQlxBpsB9soiEcYcXXEr2w3oOiKZ-frKGO1jxIA8YDWjJ0YchXZDqIsSeJwjrW2K0RnKq2IGwmgGHjG14SskcAXE_8xPpLdyB-8ruco3MKOMxqkHeYYwBmZuCSJlw45_a7FFohqPGysnp3p-leB16FTahhMjRPLYshDP5ozcJJaJRP7RP5rPn7_0etsNx58y5b0BRQKYnELDSBzWLT8hKqi34jF1oXj_3VC6GYFpY7iBQpDRLtyu4791ob7CyPhX4zIiFWaL-N2xuE5mGceJtOZv36lxRQ-eZPsSAxTBWAUTrRN4RE2UNRLR2x5Dzw",
+    "e": "AQAB",
+    "kid": "BSyYwlVUW99QO4uHLgLVXomPYv7wPaq_s6nSmD9ZRhM",
+    "alg": "RS256",
+    "use": "sig"
+  },
+  "relyingPartyId": "wallet-demo",
+  "userClaims": [
+    "name",
+    "email",
+    "phone_number",
+    "gender",
+    "birthdate",
+    "picture",
+    "address"
+  ],
+  "authContextRefs": [
+    "mosip:idp:acr:generated-code",
+    "mosip:idp:acr:static-code",
+    "mosip:idp:acr:knowledge",
+    "mosip:idp:acr:biometrics"
+  ],
+  "logoUri": "https://api.collab.mosip.net/inji/mosip-logo.png",
+  "redirectUris": [
+    "http://localhost:3004/redirect",
+    "io.mosip.residentapp.inji://oauthredirect"
+  ],
+  "grantTypes": [
+    "authorization_code"
+  ],
+  "clientAuthMethods": [
+    "private_key_jwt"
+  ]
+}
