@@ -1,0 +1,17 @@
+{
+  "individualId": "7841223190",
+  "pin": "111111",
+  "fullName": [{ "language": "eng", "value": "Asha Devi Sharma" }],
+  "givenName": [{ "language": "eng", "value": "Asha Devi" }],
+  "familyName": [{ "language": "eng", "value": "Sharma" }],
+  "gender": [{ "language": "eng", "value": "Female" }],
+  "locality": [{ "language": "eng", "value": "Bengaluru" }],
+  "region": [{ "language": "eng", "value": "Karnataka" }],
+  "country": [{ "language": "eng", "value": "IND" }],
+  "preferredLang": "eng",
+  "dateOfBirth": "1992/03/14",
+  "postalCode": "560001",
+  "encodedPhoto": "ZGVtby1waG90bw==",
+  "email": "asha@pilot.local",
+  "phone": "+910000000001"
+}

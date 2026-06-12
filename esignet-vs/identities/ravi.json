@@ -1,0 +1,17 @@
+{
+  "individualId": "3320114588",
+  "pin": "111111",
+  "fullName": [{ "language": "eng", "value": "Ravi Kumar Patel" }],
+  "givenName": [{ "language": "eng", "value": "Ravi Kumar" }],
+  "familyName": [{ "language": "eng", "value": "Patel" }],
+  "gender": [{ "language": "eng", "value": "Male" }],
+  "locality": [{ "language": "eng", "value": "Ahmedabad" }],
+  "region": [{ "language": "eng", "value": "Gujarat" }],
+  "country": [{ "language": "eng", "value": "IND" }],
+  "preferredLang": "eng",
+  "dateOfBirth": "1988/11/02",
+  "postalCode": "380001",
+  "encodedPhoto": "ZGVtby1waG90bw==",
+  "email": "ravi@pilot.local",
+  "phone": "+910000000002"
+}

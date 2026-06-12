@@ -69,19 +69,24 @@ jobs:
           echo "eSignet: https://esignet-vs.mosip.testnet.verana.network/v1/esignet"
           echo "OIDC UI: https://esignet-ui-vs.mosip.testnet.verana.network"
 
-      - name: Load mock identities (idempotent)
+      # Identities live in esignet-vs/identities/*.json and must satisfy the image's
+      # mock-identity-schema.json: individualId is NUMERIC ONLY (^[0-9]{5,19}$) and
+      # givenName/familyName/gender/locality/region/country/postalCode/encodedPhoto/
+      # preferredLang are all required. The step FAILS on a rejected identity — an
+      # earlier '|| true' version silently loaded nothing.
+      - name: Load mock identities
         env:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
         run: |
           NS="${NS_SECRET:-mosip}"
           POD=$(kubectl get pods -n "$NS" -l app=mock-identity-system -o jsonpath='{.items[0].metadata.name}')
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-          for rec in \
-            '{"individualId":"MOSIP-UIN-7841-2231-9056","pin":"111111","fullName":[{"language":"eng","value":"Asha Devi Sharma"}],"dateOfBirth":"1992-03-14","email":"asha@pilot.local","phone":"+910000000001"}' \
-            '{"individualId":"MOSIP-UIN-3320-1145-8870","pin":"111111","fullName":[{"language":"eng","value":"Ravi Kumar Patel"}],"dateOfBirth":"1988-11-02","email":"ravi@pilot.local","phone":"+910000000002"}'; do
-            kubectl exec "$POD" -n "$NS" -- curl -s -X POST http://localhost:8082/v1/mock-identity-system/identity \
-              -H 'Content-Type: application/json' \
-              -d "{\"requestTime\":\"$NOW\",\"request\":$rec}" || true
+          for f in esignet-vs/identities/*.json; do
+            BODY=$(jq -n --arg t "$NOW" --slurpfile r "$f" '{requestTime:$t, request:$r[0]}')
+            RESP=$(echo "$BODY" | kubectl exec -i "$POD" -n "$NS" -- curl -s -X POST http://localhost:8082/v1/mock-identity-system/identity \
+              -H 'Content-Type: application/json' -d @-)
+            echo "$f -> $RESP"
+            echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
           done
 
       # The stack reset wipes registered OIDC clients with the DB — re-register the wallet
