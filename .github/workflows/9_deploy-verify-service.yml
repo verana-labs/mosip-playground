@@ -28,19 +28,42 @@ jobs:
           printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Deploy verify-service + postgres
+      - name: Deploy verify-service + edge + postgres
         env:
           NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+          VERIFIER_KEYSTORE_B64: ${{ secrets.VERIFIER_KEYSTORE_B64 }}
         run: |
           NS="${NS_SECRET:-mosip}"
           echo "Namespace: $NS"
           kubectl create configmap verify-service-initdb -n "$NS" \
             --from-file=init.sql=verify-service-vs/init.sql \
             --dry-run=client -o yaml | kubectl apply -f -
+          # Verana phase 2: verifier Ed25519 keystore (#key-0) from GH secret -> k8s Secret
+          if [ -z "$VERIFIER_KEYSTORE_B64" ]; then
+            echo "::error::VERIFIER_KEYSTORE_B64 secret is not set — set it with: gh secret set VERIFIER_KEYSTORE_B64 < verifier.p12.b64"
+            exit 1
+          fi
+          echo "$VERIFIER_KEYSTORE_B64" | base64 -d > /tmp/verifier.p12
+          kubectl create secret generic verifier-keystore -n "$NS" \
+            --from-file=verifier.p12=/tmp/verifier.p12 \
+            --dry-run=client -o yaml | kubectl apply -f -
+          rm -f /tmp/verifier.p12
+          # static did.json + ECS-SERVICE linked-VP served at the inji-verify did:web host (resolver Q1)
+          kubectl create configmap verify-edge-static -n "$NS" \
+            --from-file=did.json=verify-service-vs/public/did.json \
+            --from-file=schemas-service-c-vp.json=verify-service-vs/public/schemas-service-c-vp.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap verify-edge-nginx -n "$NS" \
+            --from-file=default.conf=verify-service-vs/edge-nginx.conf \
+            --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -n "$NS" -f verify-service-vs/manifest.yaml
+          # pick up changed secret/configmaps (no pod-template change otherwise)
+          kubectl rollout restart deployment/verify-service deployment/verify-edge -n "$NS" 2>/dev/null || true
           kubectl rollout status deployment/postgres-verify -n "$NS" --timeout=180s
           kubectl rollout status deployment/verify-service -n "$NS" --timeout=420s
-          echo "verify-service available in-cluster at http://verify-service:8080"
+          kubectl rollout status deployment/verify-edge -n "$NS" --timeout=180s
+          echo "verify-service: http://verify-service:8080"
+          echo "did:web: https://inji-verify.mosip.testnet.verana.network/v1/verify/did.json"
 
       - name: Summary
         if: always()

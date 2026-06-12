@@ -1,0 +1,15 @@
+{
+  "format": "jsonld",
+  "did": "did:web:inji-verify.mosip.testnet.verana.network:v1:verify",
+  "jsonSchemaCredentialId": "https://ecs-trust-registry.testnet.verana.network/vt/schemas-service-jsc.json",
+  "claims": {
+    "id": "did:web:inji-verify.mosip.testnet.verana.network:v1:verify",
+    "name": "Inji Verify - Resident ID Verifier",
+    "type": "VerifierService",
+    "description": "MOSIP Inji Verify relying party for the Foundational Resident ID pilot",
+    "logo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "minimumAgeRequired": 0,
+    "termsAndConditions": "https://verana-labs.github.io/governance-docs/EGF/example.pdf",
+    "privacyPolicy": "https://verana-labs.github.io/governance-docs/EGF/example.pdf"
+  }
+}

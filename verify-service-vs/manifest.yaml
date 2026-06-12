@@ -86,12 +86,21 @@ spec:
             - { name: INJI_VERIFY_REDIRECT_URI, value: "https://inji-verify.mosip.testnet.verana.network" }
             - { name: INJI_VERIFY_RESPONSE_CODE_EXPIRY_TIME_IN_MINS, value: "5" }
             - { name: INJI_VERIFY_CLAIMS_WITH_META_DATA, value: "_sd,_sd_alg,iss,cnf,sub,aud,exp,nbf,iat,cti" }
+            # Verana phase 2: load OUR Ed25519 keystore so vp-request JWTs are signed by the
+            # registered did:web #key-0 (matches verify-service-vs/public/did.json). Overrides the
+            # image's bundled classpath:sample-keystore/test.p12 via Spring relaxed binding.
+            - { name: INJI_KEYSTORE_FILE_PATH, value: "file:/keystore/verifier.p12" }
           readinessProbe:
             # verify-service runs under context path /v1/verify
             httpGet: { path: /v1/verify/actuator/health, port: 8080 }
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 30
+          volumeMounts:
+            - { name: verifier-keystore, mountPath: /keystore, readOnly: true }
+      volumes:
+        - name: verifier-keystore
+          secret: { secretName: verifier-keystore }
 ---
 apiVersion: v1
 kind: Service
@@ -101,3 +110,70 @@ spec:
   selector: { app: verify-service }
   ports:
     - { port: 8080, targetPort: 8080 }
+---
+# Verana phase 2 — edge for the inji-verify did:web host. Serves the static did.json +
+# ECS-SERVICE linked-VP (for resolver Q1 TRUSTED) and proxies the rest to verify-service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verify-edge
+  labels: { app: verify-edge }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: verify-edge }
+  template:
+    metadata:
+      labels: { app: verify-edge }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:stable
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          volumeMounts:
+            - { name: nginx-conf, mountPath: /etc/nginx/conf.d/default.conf, subPath: default.conf }
+            - { name: static, mountPath: /static }
+          readinessProbe:
+            httpGet: { path: /v1/verify/did.json, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: nginx-conf
+          configMap: { name: verify-edge-nginx }
+        - name: static
+          configMap: { name: verify-edge-static }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verify-edge
+spec:
+  selector: { app: verify-edge }
+  ports:
+    - { port: 80, targetPort: 80 }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inji-verify
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [inji-verify.mosip.testnet.verana.network]
+      secretName: inji-verify.mosip.testnet.verana.network-cert
+  rules:
+    - host: inji-verify.mosip.testnet.verana.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: verify-edge, port: { number: 80 } }
