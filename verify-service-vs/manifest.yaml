@@ -81,7 +81,7 @@ spec:
             - { name: INJI_VP_REQUEST_LONG_POLLING_TIMEOUT, value: "55000" }
             - { name: INJI_VP_SUBMISSION_BASE_URL, value: "https://inji-verify.mosip.testnet.verana.network/v1/verify" }
             - { name: INJI_DID_VERIFY_URI, value: "did:web:inji-verify.mosip.testnet.verana.network:v1:verify" }
-            - { name: INJI_DID_VERIFY_PUBLIC_KEY_URI, value: "did:web:inji-verify.mosip.testnet.verana.network:verify#key-0" }
+            - { name: INJI_DID_VERIFY_PUBLIC_KEY_URI, value: "did:web:inji-verify.mosip.testnet.verana.network:v1:verify#key-0" }
             - { name: INJI_KEYSTORE_FILE_PASS, value: mosip }
             - { name: INJI_VERIFY_REDIRECT_URI, value: "https://inji-verify.mosip.testnet.verana.network" }
             - { name: INJI_VERIFY_RESPONSE_CODE_EXPIRY_TIME_IN_MINS, value: "5" }
