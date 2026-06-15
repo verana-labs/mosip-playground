@@ -5,11 +5,10 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **3a + 3b + 3c DONE — headline DoD proven.** EGF v2 live on TR 167 (3a); grantor-mode
-> schema 242 + root perm 748 (3b); a **grantor accredited a second issuer with no root tx**, and it
-> **resolves `authorized:true`** (3c). Next: **3d** (fees + sessions). Each on-chain step is gated on a
-> per-tx confirmation (exact command + signing account + effect, dry-run first). Irreversible — testnet
-> throwaways only.
+> Status: **3a–3d DONE.** EGF v2 live (3a); grantor-mode schema 242 + root 748 (3b); grantor accredited
+> a 2nd issuer, no root tx, `authorized:true` (3c); **issuance fee collected on-chain via a perm-session**
+> — grantor-2 earned a revenue share (3d). Next: **3e** (revocation latency) then **3f** (slash/repay).
+> Each on-chain step is gated on a per-tx confirmation. Irreversible — testnet throwaways only.
 
 ## TL;DR
 
@@ -115,7 +114,7 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
 - **Verify (the headline):** resolver `issuer-authorization` for the second issuer's DID + new VTJSC
   returns `authorized:true` **with zero transaction signed by `mosip-deploy`**.
 
-### 3d — Fees + permission sessions
+### 3d — Fees + permission sessions ✅ DONE (2026-06-15, issuance fee; verification documented)
 - With non-zero fees on the new schema, drive an issuance and a verification that incur the fee /
   consume a `perm-session` (`create-or-update-perm-session`).
 - **Verify:** on-chain trust-deposit / fee movement (`query td get-trust-deposit <acct>` before/after),
@@ -213,3 +212,30 @@ authorized purely via the grantor.
 > ignores the VTJSC proof. The production path (needed before issuing+verifying real credentials under
 > 242 through the full credential-resolution path) is to mint an org-signed VTJSC via the org admin
 > `POST /v1/vt/json-schema-credentials` (reached by a CI port-forward, since it's not publicly exposed).
+
+**3d — fees + permission sessions (2026-06-15).** Fee model (read from `x/perm/keeper/csps.go`
+`findBeneficiaries`): a perm-session collects the **ancestor** perms' fees (the ecosystem/grantor
+*revenue share*), NOT the leaf issuer's own fee. So with schema 242's root `0/0/0`, a session on issuer
+750 collected **0** (session `…03d1`, only gas moved). To demonstrate real collection, a fee-bearing
+grantor was added on schema 242:
+- grantor-2 perm **751** (`start-perm-vp issuer-grantor 748` tx `C65A3F2`; `set-perm-vp-validated 751
+  --issuance-fees 1 --verification-fees 1` tx `FDDFB32`) — a grantor CAN carry issuance/verification
+  fees (the "ISSUER-only" restriction is on `create-perm`, not `set-perm-vp-validated`).
+- issuer-4 perm **752** under grantor-2 (`start-perm-vp issuer 751` tx `6B3A4F3`; grantor validates,
+  tx `C907DC2`).
+- verifier perm **754** (`create-perm 242 verifier … --effective-from <+15s>` tx `E04BA7C`). NOTE:
+  `create-perm` **requires `--effective-from`** or the perm is INACTIVE (`effective_from` null) — perm
+  753 was created without it and was unusable.
+- **Issuance session** (`create-or-update-perm-session …03d2 750 746 --issuer-perm-id 752`, tx
+  `6956E74`): creator `mosip-deploy` paid ~2.8 VNA; **grantor-2's grantee (pilot-admin) earned +0.6 VNA**
+  — a real issuance-fee revenue share collected on-chain. ✅
+- **Verification session** (tx `C2F9E97`): consumed a session but collected **0**, because schema 242's
+  **OPEN verifier-mode** makes `findBeneficiaries` return only the ECOSYSTEM root (748, `0`) — it does
+  not walk the grantor. Capturing a grantor-tier verification fee needs a `GRANTOR_VALIDATION`
+  verifier-mode schema. Documented; not built (per decision).
+
+> **Gotchas (3d):** (1) a fee-distributing session needs more gas than the default 200k — issuance
+> ~450k, and an **OPEN verifier-mode verification session ~650k** (it `Walk`s the whole perm store for
+> the ECOSYSTEM perm). Dry-run for the estimate; use `--gas auto --gas-adjustment 1.3 --gas-prices
+> 3uvna`. (2) sessions need BOTH `agent-perm-id` + `wallet-agent-perm-id` (mandatory) as valid ISSUER
+> perms. (3) the session `[id]` is a caller-chosen UUID.
