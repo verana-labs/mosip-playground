@@ -5,11 +5,11 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **3a + 3b DONE on-chain.** Phases 0–2 re-verified this session. EGF v2 live on TR 167 (3a);
-> new grantor-mode **schema 242** + ECOSYSTEM **root perm 748** live (3b, fees 0/0/0 per decision).
-> Next: **3c** — a grantor accredits a second issuer with no root tx (headline DoD). Each on-chain step
-> is gated on a per-tx confirmation (exact command + signing account + effect, dry-run first).
-> Irreversible — testnet throwaways only.
+> Status: **3a + 3b + 3c DONE — headline DoD proven.** EGF v2 live on TR 167 (3a); grantor-mode
+> schema 242 + root perm 748 (3b); a **grantor accredited a second issuer with no root tx**, and it
+> **resolves `authorized:true`** (3c). Next: **3d** (fees + sessions). Each on-chain step is gated on a
+> per-tx confirmation (exact command + signing account + effect, dry-run first). Irreversible — testnet
+> throwaways only.
 
 ## TL;DR
 
@@ -107,7 +107,7 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
   authorization queries key on VTJSC id (confirm during build).
 - **Verify:** `query cs get-schema <id>` shows modes + validity periods; root perm shows fees.
 
-### 3c — Grantor tier + second issuer (headline DoD)
+### 3c — Grantor tier + second issuer ✅ DONE (2026-06-15, headline DoD)
 - Ecosystem root creates a **GRANTOR** perm for the regional accreditor on the new schema.
 - The **second issuer** runs `start-perm-vp issuer <grantor-perm-id>` (may request fees via
   `--issuance-fees`/`--validation-fees`), the **grantor** (not the root) runs
@@ -184,3 +184,32 @@ SHA-pinned URL (commit `0835414`) → `sha384-PP6AbuFetAmv4S6DTXzOVV69+nTZXzsooH
 > `$id` and reinjects `vpr:verana:<chain>/cs/v1/js/<id>`, so reusing another schema's JSON is safe.
 > (4) **Perm `[type]` is kebab-case**: `issuer`, `verifier`, `issuer-grantor`, `verifier-grantor`,
 > `ecosystem`, `holder` — all-caps / snake_case / numeric are all REJECTED by the CLI enum parser.
+
+**3c — grantor accredits a second issuer, no root tx (2026-06-15, headline DoD).** Accounts: grantor =
+`mosip-pilot-admin` (`did:web:grantor-region-a…`), 2nd issuer = `mosip-verifier-vs`
+(`did:web:inji-certify-2.mosip.testnet.verana.network`). Flow:
+- (a) grantor `start-perm-vp issuer-grantor 748 --did <grantor-did>` → tx `DA9648C`, perm **749** PENDING.
+- (b) `mosip-deploy` `set-perm-vp-validated 749 --validation-fees 5 --effective-until <+300d>` → tx
+  `90DE646`, perm 749 VALIDATED (`vp_exp` = start+365d).
+- (c) 2nd issuer `start-perm-vp issuer 749 --did <issuer2-did> --issuance-fees '{"value":1}'` → tx
+  `EE2C03B`, perm **750**; event `fees=5000000` (escrow) + `deposit=1000000` (issuer trust deposit = 5×20%).
+- (d) **grantor** `set-perm-vp-validated 750 --issuance-fees 1 --effective-until <+300d>` → tx `852B15B`,
+  perm 750 VALIDATED — **signed by the grantor, zero `mosip-deploy`**. Escrow (5 VNA) released to grantor.
+- Money moved: issuer −6 VNA (5→grantor + 1 own deposit), grantor +~4 VNA wallet +1 VNA deposit.
+
+**Resolver verification.** verre's Q2 (`@verana-labs/verre` `verifyPermissions`) only fetches the VTJSC
+to read `credentialSubject.jsonSchema.$ref` → schema id, then checks the **on-chain perm** — it does
+**not** verify the VTJSC proof/issuer/digestSRI in that path (those are in the separate
+credential-resolution path). So a fetchable VTJSC suffices. Schema 242 has none served by the org
+(it was created via CLI, not the org's schema flow, and the public admin ingress exposes only
+`/v1/vt/issue-credential`), so a **static, unsigned pilot VTJSC** is served at
+`https://raw.githubusercontent.com/verana-labs/mosip-playground/main/docs/phase-3/vtjsc-242.json`
+(`$ref`→242, `digestSRI` = sha384 of the canonical on-chain schema). Resolver Q2 for the 2nd issuer +
+that VTJSC → **`authorized:true`** (`evaluatedAt` 2026-06-15T10:22Z). The DoD holds: second issuer
+authorized purely via the grantor.
+
+> **Pilot shortcut (documented):** the 242 VTJSC is unsigned, served from GitHub raw rather than
+> org-minted. It is sound for this DoD because the trust decision is the on-chain perm and verre Q2
+> ignores the VTJSC proof. The production path (needed before issuing+verifying real credentials under
+> 242 through the full credential-resolution path) is to mint an org-signed VTJSC via the org admin
+> `POST /v1/vt/json-schema-credentials` (reached by a CI port-forward, since it's not publicly exposed).
