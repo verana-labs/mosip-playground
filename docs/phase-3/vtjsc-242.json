@@ -1,0 +1,27 @@
+{
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    "https://www.w3.org/ns/credentials/examples/v2"
+  ],
+  "id": "https://raw.githubusercontent.com/verana-labs/mosip-playground/main/docs/phase-3/vtjsc-242.json",
+  "type": [
+    "VerifiableCredential",
+    "JsonSchemaCredential"
+  ],
+  "issuer": "did:webvh:QmUNEzd1z2TktGLNhQKYuhNp6ckq4xzetHD5oVdH2YD3PA:organization-vs.mosip.testnet.verana.network",
+  "issuanceDate": "2026-06-15T10:30:00.000Z",
+  "expirationDate": "2036-06-15T10:30:00.000Z",
+  "credentialSubject": {
+    "type": "JsonSchema",
+    "jsonSchema": {
+      "$ref": "vpr:verana:vna-testnet-1/cs/v1/js/242"
+    },
+    "digestSRI": "sha384-HOsQzuSRNhLBiC7cTRNvvf5/mPy2dGAqQtJeIxtMfXM4o48V4g9McvBlI1e4QT/4",
+    "id": "vpr:verana:vna-testnet-1/cs/v1/js/242"
+  },
+  "credentialSchema": {
+    "id": "https://www.w3.org/ns/credentials/json-schema/v2.json",
+    "type": "JsonSchema",
+    "digestSRI": "sha384-FdPKzKLFNWo+3ZqV9vjuY8aNQk+636lvGRKKNzAfy93Q9jf+lNHD8j91g/KHWCBX"
+  }
+}
