@@ -5,11 +5,12 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **3a–3f done (3g multi-eco = optional stretch).** EGF v2 (3a); grantor-mode schema 242 + root
-> 748 (3b); grantor accredited a 2nd issuer, no root tx, `authorized:true` (3c); issuance fee collected
-> via a perm-session (3d); **3e: on-chain revoke works but does NOT propagate to the resolver — verre
-> ignores `revoked`, filed verana-labs/verre#107**; slash + repay accountability loop proven (3f). All
-> on-chain, per-tx gated, testnet throwaways only.
+> Status: **3a–3g DONE.** EGF v2 (3a); grantor-mode schema 242 + root 748 (3b); grantor accredited a 2nd
+> issuer, no root tx, `authorized:true` (3c); **both issuance + verification fees collected on-chain via
+> perm-sessions** (3d issuance via grantor; verification via schema 243 root); **3e: on-chain revoke works
+> but the resolver doesn't honor `revoked` — filed verana-labs/verre#107** (the one outstanding item,
+> upstream); slash + repay accountability loop (3f); **second ecosystem TR 168 + schema 244 + issuer,
+> resolving under its own ecosystem (3g)**. All on-chain, testnet throwaways only.
 
 ## TL;DR
 
@@ -132,7 +133,7 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
   `repay-perm-slashed-td <id>` once to prove the accountability loop (read the td slashing math at
   `v0.9.4` first; this burns value — small amount, explicit confirm).
 
-### 3g — Multi-ecosystem (optional / stretch)
+### 3g — Multi-ecosystem ✅ DONE (2026-06-15)
 - A second TR + schema + cross-ecosystem recognition; a credential from ecosystem B resolves under
   cross-ecosystem rules. Treated as stretch unless prioritized.
 
@@ -263,3 +264,23 @@ revoked (revoke leaves `Deposit` intact).
 - `repay-perm-slashed-td 750` signed by the grantee (verifier-vs), tx `FF5F359` → trust deposit `amount`
   restored `540000 → 1040000`, perm `repaid_deposit=500000`, `repaid_by=verifier-vs`. Repay refunds the
   deposit from the grantee's wallet; it does **not** un-revoke the perm.
+
+**3d verification fee — completed (2026-06-15).** Since 242's OPEN verifier-mode routes verification
+revenue to its (fee-free) root, a dedicated OPEN/OPEN **schema 243** was created with root perm **755**
+carrying `verification_fees=1`; verifier perm **756** (`did:web:relying-party-b…`) on it. A verification
+session (`create-or-update-perm-session …0243 746 752 --verifier-perm-id 756`, tx `4B70647`) collected
+the root's verification fee — creator pilot-admin paid, **root grantee mosip-deploy earned +0.72 VNA**.
+So both fee types are now demonstrably collected on-chain (issuance via the grantor in 3d, verification
+via the ecosystem root here).
+
+**3g — multi-ecosystem (2026-06-15).** There is no explicit cross-recognition primitive; multi-ecosystem
+is inherent (each schema's `$ref` resolves to its own TR, so the resolver evaluates each credential under
+its own ecosystem). Stood up a full second ecosystem signed by `mosip-verifier-vs` as controller:
+- **TR 168** (`did:web:ecosystem-b.testnet.verana.network`, `create-trust-registry`, tx `5941E38`) —
+  references the same pilot EGF doc at creation.
+- **Schema 244** under TR 168 (OPEN/OPEN, tx in block 3911052), **root perm 757**, **issuer perm 758**
+  (`did:web:inji-certify-ecob.testnet.verana.network`).
+- Static VTJSC at `docs/phase-3/vtjsc-244.json` (`$ref`→244). Resolver Q2 for issuer 758 + that VTJSC
+  → `authorized:true` **under TR 168**, alongside the TR-167 ecosystem — two independent ecosystems
+  coexisting on the same network, each resolving under its own trust registry. _(Q2 verified once the
+  244 VTJSC is pushed live; see Validation tail.)_
