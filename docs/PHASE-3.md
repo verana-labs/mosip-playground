@@ -282,5 +282,6 @@ its own ecosystem). Stood up a full second ecosystem signed by `mosip-verifier-v
   (`did:web:inji-certify-ecob.testnet.verana.network`).
 - Static VTJSC at `docs/phase-3/vtjsc-244.json` (`$ref`→244). Resolver Q2 for issuer 758 + that VTJSC
   → `authorized:true` **under TR 168**, alongside the TR-167 ecosystem — two independent ecosystems
-  coexisting on the same network, each resolving under its own trust registry. _(Q2 verified once the
-  244 VTJSC is pushed live; see Validation tail.)_
+  coexisting on the same network, each resolving under its own trust registry. **Verified live
+  2026-06-15:** issuer 758 + the 244 VTJSC → `authorized:true`, and TR-167 issuer 746 still
+  `authorized:true` at the same time.
