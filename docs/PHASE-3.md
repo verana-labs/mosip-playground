@@ -5,10 +5,10 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **3a–3d DONE.** EGF v2 live (3a); grantor-mode schema 242 + root 748 (3b); grantor accredited
-> a 2nd issuer, no root tx, `authorized:true` (3c); **issuance fee collected on-chain via a perm-session**
-> — grantor-2 earned a revenue share (3d). Next: **3e** (revocation latency) then **3f** (slash/repay).
-> Each on-chain step is gated on a per-tx confirmation. Irreversible — testnet throwaways only.
+> Status: **3a–3d done; 3e diagnosed.** EGF v2 (3a); grantor-mode schema 242 + root 748 (3b); grantor
+> accredited a 2nd issuer, no root tx, `authorized:true` (3c); issuance fee collected via a perm-session
+> (3d). **3e: on-chain revoke works but does NOT propagate to the resolver — verre ignores the `revoked`
+> flag (filed verana-labs/verre#107).** Next: **3f** (slash/repay). Per-tx gated; testnet throwaways only.
 
 ## TL;DR
 
@@ -120,7 +120,7 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
 - **Verify:** on-chain trust-deposit / fee movement (`query td get-trust-deposit <acct>` before/after),
   and the resolver `fees`/session field is now populated (was `{}`).
 
-### 3e — Revocation latency
+### 3e — Revocation latency ⚠️ DIAGNOSED (on-chain revoke works; resolver propagation blocked by verre#107)
 - `revoke-perm <issuer-perm>` and measure how fast the resolver flips Q2 → unauthorized and the
   **Inji Verify verdict** + **Inji Web gate** follow.
 - Resolver caches resolve verdicts ~1h but **re-evaluates block-driven** (Phase 2 saw a re-eval well
@@ -239,3 +239,15 @@ grantor was added on schema 242:
 > the ECOSYSTEM perm). Dry-run for the estimate; use `--gas auto --gas-adjustment 1.3 --gas-prices
 > 3uvna`. (2) sessions need BOTH `agent-perm-id` + `wallet-agent-perm-id` (mandatory) as valid ISSUER
 > perms. (3) the session `[id]` is a caller-chosen UUID.
+
+**3e — revocation propagation (2026-06-15). FINDING: on-chain revoke does NOT reach the resolver.**
+`revoke-perm 750` (signed by the grantor pilot-admin, tx `E3A191E`) set `revoked` on-chain immediately,
+and the chain honors it (`extend-perm`/sessions reject revoked perms). But the resolver Q2 for the
+revoked issuer stayed `authorized:true` for the full poll (57 blocks / ~40 min, never flipped). Root
+cause, confirmed against the deployed `@verana-labs/verre@0.2.5` (`src/resolver/didValidator.ts`
+`verifyPermission`): it validates a perm by `type` + the `effective_from`/`effective_until` window and
+**never checks `revoked`**. The Q2 route runs verre live (no cache), and the indexer `/perm/v1/list` it
+queries returns the perm WITH `revoked` populated — verre just ignores it. Same function backs Q2 + Q3,
+so revoked issuers AND verifiers stay authorized (affects Phase-1 Inji Verify + Phase-2 wallet gate).
+Filed **verana-labs/verre#107**. Live repro: `~/.verana/mosip/verre-revoke-repro.sh`. The DoD's
+revocation half is blocked on this upstream fix; on-chain revocation itself is correct.
