@@ -7,7 +7,6 @@ import {
   ShieldAlert,
   Loader2,
   RefreshCw,
-  ArrowUpRight,
 } from "lucide-react";
 import { RESOLVER, SUBJECTS, type Subject } from "../config";
 
@@ -32,7 +31,7 @@ function verdictFor(s: Subject, r: Result): Verdict {
   if (!trusted)
     return {
       tone: "bad",
-      title: "Untrusted issuer",
+      title: s.kind === "issuer" ? "Untrusted issuer" : "Untrusted verifier",
       detail:
         "Not a trusted participant of the Verana Trust Network. A valid signature proves authenticity, not legitimacy.",
       Icon: ShieldX,
@@ -59,19 +58,15 @@ const TONE: Record<Verdict["tone"], { bar: string; chip: string; text: string }>
   unknown: { bar: "bg-gray-400", chip: "bg-gray-100 text-gray-600", text: "text-gray-600" },
 };
 
-async function resolve(s: Subject): Promise<Result> {
+async function resolve(s: Subject, signal: AbortSignal): Promise<Result> {
   const did = encodeURIComponent(s.did);
   const vtjsc = encodeURIComponent(s.vtjsc);
   const authPath = s.kind === "issuer" ? "issuer-authorization" : "verifier-authorization";
-  try {
-    const [q1, q2] = await Promise.all([
-      fetch(`${RESOLVER}/resolve?did=${did}`).then((r) => r.json()).catch(() => ({})),
-      fetch(`${RESOLVER}/${authPath}?did=${did}&vtjscId=${vtjsc}`).then((r) => r.json()).catch(() => ({})),
-    ]);
-    return { trustStatus: q1?.trustStatus, authorized: q2?.authorized === true };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "network error" };
-  }
+  const [q1, q2] = await Promise.all([
+    fetch(`${RESOLVER}/resolve?did=${did}`, { signal }).then((r) => r.json()),
+    fetch(`${RESOLVER}/${authPath}?did=${did}&vtjscId=${vtjsc}`, { signal }).then((r) => r.json()),
+  ]);
+  return { trustStatus: q1?.trustStatus, authorized: q2?.authorized === true };
 }
 
 export default function ResolverVerdict() {
@@ -79,17 +74,38 @@ export default function ResolverVerdict() {
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Each run owns an AbortController: switching subjects aborts the previous
+  // request (so a slow earlier response can't land under the new subject's
+  // labels), and a timeout aborts a stalled socket.
   const run = useCallback((s: Subject) => {
+    const ac = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      ac.abort();
+    }, 8000);
     setLoading(true);
     setResult(null);
-    resolve(s).then((r) => {
-      setResult(r);
-      setLoading(false);
-    });
+    resolve(s, ac.signal).then(
+      (r) => {
+        clearTimeout(timer);
+        if (ac.signal.aborted && !timedOut) return; // superseded by a newer request
+        setResult(r);
+        setLoading(false);
+      },
+      (e: unknown) => {
+        clearTimeout(timer);
+        if (ac.signal.aborted && !timedOut) return;
+        setResult({ error: timedOut ? "Resolver timed out" : e instanceof Error ? e.message : "network error" });
+        setLoading(false);
+      },
+    );
+    return ac;
   }, []);
 
   useEffect(() => {
-    run(active);
+    const ac = run(active);
+    return () => ac.abort();
   }, [active, run]);
 
   const verdict = result ? verdictFor(active, result) : null;
@@ -103,6 +119,7 @@ export default function ResolverVerdict() {
           <button
             key={s.key}
             onClick={() => setActive(s)}
+            aria-pressed={active.key === s.key}
             className={`text-left px-3 py-2 rounded-lg text-sm border transition-colors ${
               active.key === s.key
                 ? "border-violet-300 bg-violet-50 text-violet-800"
@@ -176,5 +193,3 @@ export default function ResolverVerdict() {
     </div>
   );
 }
-
-export { ArrowUpRight };

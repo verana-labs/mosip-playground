@@ -144,7 +144,7 @@ export default function PlaygroundPage() {
                   { f: "tampered", label: "Invalid signature", tone: "text-gray-500" },
                 ].map((q) => (
                   <div key={q.f} className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
-                    <img src={`/qrs/${q.f}.png`} alt={q.f} className="w-full rounded-md mb-2" />
+                    <img src={`/qrs/${q.f}.png`} alt={`${q.label} — sample QR`} className="w-full rounded-md mb-2" />
                     <span className={`text-xs font-medium ${q.tone}`}>{q.label}</span>
                   </div>
                 ))}
