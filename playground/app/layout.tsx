@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Verana Playground",
+  title: "MOSIP × Verana — Inji trust integration",
   description:
-    "An interactive guide to Verifiable Trust — learn how credentials are issued, held, and verified.",
+    "An interactive showcase of MOSIP Inji credentials verified against the Verana Trust Network: who is trusted and accredited, checked live, end to end.",
 };
 
 export default function RootLayout({
