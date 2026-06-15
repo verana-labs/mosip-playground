@@ -5,10 +5,11 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **DESIGN — not started on-chain.** Phases 0–2 are live and re-verified against the chain
-> this session (see Verified baseline). The plan below is approved at the high level (3a→3g in order);
-> each on-chain step is gated on an explicit per-tx confirmation from Maxime (exact command + signing
-> account + effect, dry-run first). On-chain txs are irreversible — testnet throwaway accounts only.
+> Status: **3a DONE (EGF v2 live on-chain).** Phases 0–2 re-verified against the chain this session.
+> Plan approved (3a→3g in order). TR 167 now carries a real EGF as active governance framework v2.
+> Next: **3b** (new grantor-mode + fees schema) — gated on the economic-number decisions below.
+> Each on-chain step is gated on an explicit per-tx confirmation (exact command + signing account +
+> effect, dry-run first). On-chain txs are irreversible — testnet throwaway accounts only.
 
 ## TL;DR
 
@@ -82,7 +83,7 @@ without large testnet spend):
 
 ## Build plan (3a→3g, de-risk first; each step real + on-chain-verifiable, local-first)
 
-### 3a — Real EGF document (smallest fully-real step; no Inji change)
+### 3a — Real EGF document ✅ DONE (2026-06-15)
 TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real authored EGF.
 - **Signing account: `mosip-deploy`** (TR 167 controller — the keeper rejects any other signer).
 - Author a concise pilot EGF (membership, accreditation, revocation, dispute/appeal, data protection,
@@ -156,4 +157,18 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
   permission topology, fewest moving parts).
 
 ## Validation results (to fill in as built)
-_(none yet — 3a pending)_
+
+**3a — EGF v2 (2026-06-15).** EGF authored at `docs/egf/mosip-pilot-egf.md`, pushed to `main`,
+SHA-pinned URL (commit `0835414`) → `sha384-PP6AbuFetAmv4S6DTXzOVV69+nTZXzsooHyAmifQq/I4dir7cUavg17UnLjnh0yn`
+(served bytes byte-identical to local). Both txs signed by `mosip-deploy` (TR 167 controller):
+- `add-governance-framework-document 167 en <url> <sri> 2` → tx `706CBCC…`, height 3906812 → GF version 2
+  (gfv 197) + doc 198 created (draft, `active_since` zero).
+- `increase-active-gf-version 167` → **first attempt out-of-gas** (code 11): default gas limit 200000 <
+  226071 needed; reverted (no state change). Retried with `--gas 320000 --fees 1000000uvna` → tx
+  `CC1A4F4…`, height 3906832 → `active_version=2`, doc 198 is the active governance framework.
+
+> **Gotcha (carry to all Phase-3 txs):** `increase-active-gf-version` needs ~226k gas, over the 200000
+> default. On this testnet `--fees 600000uvna` implies min gas price ≤ 3 uvna/gas, so for any tx above
+> the default gas limit use `--gas ~320000 --fees 1000000uvna` (or `--gas auto --gas-adjustment 1.5`
+> with a proportionally larger fee). `create-credential-schema` / `create-perm` likely exceed it too —
+> dry-run first to read the estimate.
