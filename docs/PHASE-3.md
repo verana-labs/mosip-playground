@@ -5,10 +5,11 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **3a–3d done; 3e diagnosed.** EGF v2 (3a); grantor-mode schema 242 + root 748 (3b); grantor
-> accredited a 2nd issuer, no root tx, `authorized:true` (3c); issuance fee collected via a perm-session
-> (3d). **3e: on-chain revoke works but does NOT propagate to the resolver — verre ignores the `revoked`
-> flag (filed verana-labs/verre#107).** Next: **3f** (slash/repay). Per-tx gated; testnet throwaways only.
+> Status: **3a–3f done (3g multi-eco = optional stretch).** EGF v2 (3a); grantor-mode schema 242 + root
+> 748 (3b); grantor accredited a 2nd issuer, no root tx, `authorized:true` (3c); issuance fee collected
+> via a perm-session (3d); **3e: on-chain revoke works but does NOT propagate to the resolver — verre
+> ignores `revoked`, filed verana-labs/verre#107**; slash + repay accountability loop proven (3f). All
+> on-chain, per-tx gated, testnet throwaways only.
 
 ## TL;DR
 
@@ -126,7 +127,7 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
 - Resolver caches resolve verdicts ~1h but **re-evaluates block-driven** (Phase 2 saw a re-eval well
   inside the TTL) — measure the real latency; the Phase-2 gate already avoids over-caching.
 
-### 3f — Trust deposits & slashing
+### 3f — Trust deposits & slashing ✅ DONE (2026-06-15)
 - Inspect the deposits backing each perm; exercise `slash-perm-td <id> <amount>` +
   `repay-perm-slashed-td <id>` once to prove the accountability loop (read the td slashing math at
   `v0.9.4` first; this burns value — small amount, explicit confirm).
@@ -251,3 +252,14 @@ queries returns the perm WITH `revoked` populated — verre just ignores it. Sam
 so revoked issuers AND verifiers stay authorized (affects Phase-1 Inji Verify + Phase-2 wallet gate).
 Filed **verana-labs/verre#107**. Live repro: `~/.verana/mosip/verre-revoke-repro.sh`. The DoD's
 revocation half is blocked on this upstream fix; on-chain revocation itself is correct.
+
+**3f — trust deposits & slashing (2026-06-15). Accountability loop proven.** The issuer 750's trust
+deposit (1.04 VNA, accrued from the 3c validation fee + 3d session) was slashable even though 750 is
+revoked (revoke leaves `Deposit` intact).
+- `slash-perm-td 750 500000` signed by the **grantor** (pilot-admin, validator-ancestor of 750), tx
+  `8655A44` → perm 750 `slashed_deposit=500000`, `slashed_by=pilot-admin`; the grantee's (verifier-vs)
+  trust deposit `amount` dropped `1040000 → 540000` (0.5 VNA burned). Slash authority = a
+  validator-ancestor or the TR controller; `amount` is uvna, capped at the perm's deposit.
+- `repay-perm-slashed-td 750` signed by the grantee (verifier-vs), tx `FF5F359` → trust deposit `amount`
+  restored `540000 → 1040000`, perm `repaid_deposit=500000`, `repaid_by=verifier-vs`. Repay refunds the
+  deposit from the grantee's wallet; it does **not** un-revoke the perm.
