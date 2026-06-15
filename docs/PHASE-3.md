@@ -5,11 +5,11 @@ Design + plan + state for Phase 3. Spec: `verana-labs/integration-sandbox` →
 VTJSC), [PHASE-1](PHASE-1.md) (resolver client + Inji Verify add-on) and [PHASE-2](PHASE-2.md) (the
 holder-side verify-the-verifier gate).
 
-> Status: **3a DONE (EGF v2 live on-chain).** Phases 0–2 re-verified against the chain this session.
-> Plan approved (3a→3g in order). TR 167 now carries a real EGF as active governance framework v2.
-> Next: **3b** (new grantor-mode + fees schema) — gated on the economic-number decisions below.
-> Each on-chain step is gated on an explicit per-tx confirmation (exact command + signing account +
-> effect, dry-run first). On-chain txs are irreversible — testnet throwaway accounts only.
+> Status: **3a + 3b DONE on-chain.** Phases 0–2 re-verified this session. EGF v2 live on TR 167 (3a);
+> new grantor-mode **schema 242** + ECOSYSTEM **root perm 748** live (3b, fees 0/0/0 per decision).
+> Next: **3c** — a grantor accredits a second issuer with no root tx (headline DoD). Each on-chain step
+> is gated on a per-tx confirmation (exact command + signing account + effect, dry-run first).
+> Irreversible — testnet throwaways only.
 
 ## TL;DR
 
@@ -96,7 +96,7 @@ TR 167 already carries a placeholder v1 doc, so this **bumps to v2** with a real
 - **Verify:** `query tr get-trust-registry 167` → `active_version=2`, new doc URL+digest present.
 - Chain stores URL+digest only (no on-chain fetch); clients/resolver fetch it.
 
-### 3b — New schema: grantor-mode + fees (substrate for 3c + 3d)
+### 3b — New schema: grantor-mode + fees ✅ DONE (2026-06-15)
 - Reuse the **resident-id JSON** of schema 241 (decision confirmed), new `cs` entry with
   **`issuer-mode=2` (GRANTOR_VALIDATION)**, `verifier-mode` TBD (likely OPEN to keep verifier path
   simple), `--issuer-grantor-validation-validity-period 365`.
@@ -172,3 +172,15 @@ SHA-pinned URL (commit `0835414`) → `sha384-PP6AbuFetAmv4S6DTXzOVV69+nTZXzsooH
 > the default gas limit use `--gas ~320000 --fees 1000000uvna` (or `--gas auto --gas-adjustment 1.5`
 > with a proportionally larger fee). `create-credential-schema` / `create-perm` likely exceed it too —
 > dry-run first to read the estimate.
+
+**3b — grantor-mode schema + root perm (2026-06-15).** Both signed by `mosip-deploy` (TR 167 controller):
+- `create-credential-schema 167 <inline JSON> 2 1 --issuer-grantor-validation-validity-period {"value":365} --issuer-validation-validity-period {"value":365} --verifier-grantor/verifier/holder {"value":0}` → tx `0510A7A…`, height 3907195 → **schema 242** (`issuer_mode=GRANTOR_VALIDATION`, `verifier_mode=OPEN`, `$id` reinjected to `…/242`, 10 VNA deposit). Reuses schema 241's resident-id JSON verbatim.
+- `create-root-perm 242 <eco-webvh-did> 0 0 0 --effective-from <now+30s>` → tx `BB8A94B…`, height 3907207 → **root perm 748** (ECOSYSTEM, grantee `mosip-deploy`, fees 0/0/0, `Deposit=0`). This is the validator the grantor VP chains to in 3c.
+
+> **CLI gotchas (3b, carry forward):** (1) `create-credential-schema [json-schema]` does NOT read a file
+> path — autocli passes it literally; pass **inline JSON** (`JSON=$(jq -c . file); …"$JSON"…`). (2) The
+> `--*-validation-validity-period` flags take `OptionalUInt32` JSON `{"value":N}`, **not** a bare integer
+> (the autocli doc example `365` is wrong); all five are mandatory. (3) `InjectCanonicalID` strips any
+> `$id` and reinjects `vpr:verana:<chain>/cs/v1/js/<id>`, so reusing another schema's JSON is safe.
+> (4) **Perm `[type]` is kebab-case**: `issuer`, `verifier`, `issuer-grantor`, `verifier-grantor`,
+> `ecosystem`, `holder` — all-caps / snake_case / numeric are all REJECTED by the CLI enum parser.
