@@ -126,6 +126,8 @@ The Trust Resolver answers three questions, and the integration **fails closed**
 > Fastest path, no setup: open **[inji-verify-ui.mosip.testnet.verana.network](https://inji-verify-ui.mosip.testnet.verana.network)**,
 > scan/upload a Resident ID QR, and watch the **MOSIP Inji Verify** result appear next to the **Verana Trust
 > Network** panel (accredited issuer vs. "valid signature, untrusted issuer").
+> Sample QRs for every outcome (accredited · untrusted · not-accredited · tampered) are in
+> [`docs/test-qrs/`](docs/test-qrs/).
 
 <p align="center">
   <img src="docs/assets/verify-trust-panel.png" width="480"
