@@ -7,7 +7,7 @@
 <p align="center"><b>Verifiable trust for MOSIP Inji credentials, on the Verana Trust Network.</b></p>
 
 <p align="center">
-  Real MOSIP <a href="https://docs.inji.io/">Inji</a> components, a thin Verana trust layer on top, no forks.<br>
+  Real MOSIP <a href="https://docs.inji.io/">Inji</a> components, a thin Verana trust layer on top.<br>
   A valid signature proves a credential is <i>authentic</i>. Verana proves the issuer and verifier are <i>legitimate</i>.
 </p>
 
