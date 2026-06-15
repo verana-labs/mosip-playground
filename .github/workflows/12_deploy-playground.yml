@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - feature/playground-mosip   # TEMP: live-test this branch before merge; revert before merging
     paths:
       - 'playground/**'
       - '.github/workflows/12_deploy-playground.yml'
