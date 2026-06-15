@@ -67,15 +67,18 @@ unmodified. Verana trust is layered on as additive pieces:
                     eSignet (auth-code AS for wallet download)
 ```
 
-| Component | Role | Live endpoint |
+| Component | Role | Host |
 |---|---|---|
-| `organization-vs` | MOSIP Pilot Authority (trust registry, schema, ECS) | `organization-vs.mosip.testnet.verana.network` |
-| `inji-certify-vs` | Issuer — Inji Certify | `inji-certify-vs.mosip.testnet.verana.network` |
-| `verify-service-vs` | Inji Verify backend + the Verana verifier DID | `inji-verify.mosip.testnet.verana.network` |
-| `inji-verify-ui` | Inji Verify UI + Verana trust panel | `inji-verify-ui.mosip.testnet.verana.network` |
-| `esignet-vs` | eSignet (OIDC AS for the wallet download flow) | `esignet-vs.mosip.testnet.verana.network` · UI `esignet-ui-vs…` |
+| `organization-vs` | MOSIP Pilot Authority (trust registry, schema, ECS) | `organization-vs.mosip.testnet.verana.network` (VS Agent API) |
+| `inji-certify-vs` | Issuer — Inji Certify | OID4VCI API under `inji-certify-vs.mosip.testnet.verana.network/v1/certify` |
+| `verify-service-vs` | Inji Verify backend + the Verana verifier DID | API under `inji-verify.mosip.testnet.verana.network/v1/verify` (e.g. `…/did.json`) |
+| `inji-verify-ui` | Inji Verify UI + Verana trust panel — **the page to open** | `inji-verify-ui.mosip.testnet.verana.network` |
+| `esignet-vs` | eSignet (OIDC AS for the wallet download flow) | API under `esignet-vs.mosip.testnet.verana.network/v1/esignet` · login UI `esignet-ui-vs…` |
 | `inji-web-vs` | Inji Web wallet + the `verana-vp-gate` add-on | runs locally (see [PHASE-2](docs/PHASE-2.md)) |
 | Verana Trust Resolver | Trust evaluation consumed by the above | `resolver.testnet.verana.network/v1/trust` |
+
+> Only the UIs (`inji-verify-ui`, `esignet-ui-vs`) render in a browser; the rest are APIs/backends, so
+> their bare hostnames aren't meant to be opened directly.
 
 The Trust Resolver answers three questions, and the integration **fails closed** on all of them:
 
@@ -134,20 +137,6 @@ Deployment is **push-to-`main`, path-filtered per service** (GitHub Actions → 
 | `11_deploy-esignet-vs` | eSignet | `esignet-vs/**` |
 
 (Workflows `2`–`6` belong to the inherited verana-demos base.)
-
-## Status & known limitations
-
-Phases **0–3 are complete and validated** against the live testnet (phases 0/1 deployed; phase 2 proven
-end-to-end in a local wallet; phase 3 fully on-chain). Two honest caveats:
-
-- **Revocation → resolver (Phase 3e).** On-chain revocation is correct and immediate, but the deployed
-  Trust Resolver library (`verre@0.2.5`) validates a permission by its type and effective window and does
-  **not** check the `revoked` flag, so a revoked issuer/verifier keeps resolving as authorized. Filed
-  upstream as [`verana-labs/verre#107`](https://github.com/verana-labs/verre/issues/107); no change needed
-  in this repo once it lands.
-- **Local wallet PDF export ([#10](https://github.com/verana-labs/mosip-playground/issues/10)).** Exporting a
-  stored card to PDF needs `datashare-service`, which isn't in the minimal local stack. Unrelated to the trust
-  integration.
 
 ## Links
 
