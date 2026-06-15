@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://inji-verify-ui.mosip.testnet.verana.network"><img alt="live demo" src="https://img.shields.io/badge/%E2%96%B6_live_demo-Inji_Verify-2ea44f"></a>
+  <a href="https://playground.mosip.testnet.verana.network"><img alt="live playground" src="https://img.shields.io/badge/%E2%96%B6_playground-live-2ea44f"></a>
   <img alt="network" src="https://img.shields.io/badge/network-vna--testnet--1-565f89">
   <img alt="phases" src="https://img.shields.io/badge/phases-0%E2%80%933_complete-2ea44f">
   <img alt="built on" src="https://img.shields.io/badge/built_on-MOSIP_Inji_%C3%97_Verana-7c3aed">
@@ -23,6 +23,7 @@
 </p>
 
 <p align="center">
+  <a href="https://playground.mosip.testnet.verana.network"><b>▶ Playground</b></a> ·
   <a href="#why-this-exists">Why</a> ·
   <a href="#the-four-phases">Phases</a> ·
   <a href="#architecture">Architecture</a> ·
@@ -123,19 +124,28 @@ The Trust Resolver answers three questions, and the integration **fails closed**
 ## See it working
 
 > [!TIP]
-> Fastest path, no setup: open **[inji-verify-ui.mosip.testnet.verana.network](https://inji-verify-ui.mosip.testnet.verana.network)**,
-> scan/upload a Resident ID QR, and watch the **MOSIP Inji Verify** result appear next to the **Verana Trust
-> Network** panel (accredited issuer vs. "valid signature, untrusted issuer").
-> Sample QRs for every outcome (accredited · untrusted · not-accredited · tampered) are in
-> [`docs/test-qrs/`](docs/test-qrs/).
+> **The fastest way to explore the whole integration is the hosted playground —
+> [playground.mosip.testnet.verana.network](https://playground.mosip.testnet.verana.network).** It walks
+> through phases 0–3 and has a **live trust-verdict widget**: pick a party, see the real resolver verdict
+> (accredited issuer · authorized verifier · untrusted · not-accredited). No setup.
 
 <p align="center">
-  <img src="docs/assets/verify-trust-panel.png" width="480"
+  <a href="https://playground.mosip.testnet.verana.network"><img src="docs/assets/playground.png" width="680"
+       alt="The MOSIP × Verana playground — a guided walkthrough of phases 0–3 with a live trust-verdict widget"></a>
+</p>
+
+Prefer the raw surfaces?
+
+- **Verify a credential** on **[Inji Verify](https://inji-verify-ui.mosip.testnet.verana.network)** — upload a
+  Resident ID QR and watch the MOSIP result next to the Verana panel; sample QRs for every outcome are in
+  [`docs/test-qrs/`](docs/test-qrs/):
+
+<p align="center">
+  <img src="docs/assets/verify-trust-panel.png" width="400"
        alt="Inji Verify showing a valid Resident ID and the Verana Trust Network panel: Accredited issuer — MOSIP Pilot Authority">
 </p>
-<p align="center"><sub>Inji Verify confirms the credential; the <b>Verana Trust Network</b> panel adds the verdict that matters — <b>Accredited issuer — MOSIP Pilot Authority</b>, with the on-chain registry, ecosystem and issuer DID.</sub></p>
 
-Ask the resolver yourself:
+- **Ask the resolver yourself:**
 
 ```bash
 curl -sG https://resolver.testnet.verana.network/v1/trust/issuer-authorization \
@@ -156,6 +166,7 @@ verify-service-vs/    Phase 1 — Inji Verify backend + the verifier did:web edg
 inji-verify-ui/       Phase 1 — Inji Verify UI + public/verana-trust-panel.js add-on
 esignet-vs/           Phase 2 — eSignet (OIDC AS) + mock identities + wallet client
 inji-web-vs/          Phase 2 — Inji Web wallet image + public/verana-vp-gate.js add-on
+playground/           Hosted showcase walkthrough → playground.mosip.testnet.verana.network
 common/               Shared shell helpers (network config, veranad, VS Agent API)
 docs/                 PHASE-0..3 design/runbook/state + assets
 ```
