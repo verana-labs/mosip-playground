@@ -127,6 +127,12 @@ The Trust Resolver answers three questions, and the integration **fails closed**
 > scan/upload a Resident ID QR, and watch the **MOSIP Inji Verify** result appear next to the **Verana Trust
 > Network** panel (accredited issuer vs. "valid signature, untrusted issuer").
 
+<p align="center">
+  <img src="docs/assets/verify-trust-panel.png" width="480"
+       alt="Inji Verify showing a valid Resident ID and the Verana Trust Network panel: Accredited issuer — MOSIP Pilot Authority">
+</p>
+<p align="center"><sub>Inji Verify confirms the credential; the <b>Verana Trust Network</b> panel adds the verdict that matters — <b>Accredited issuer — MOSIP Pilot Authority</b>, with the on-chain registry, ecosystem and issuer DID.</sub></p>
+
 Ask the resolver yourself:
 
 ```bash
