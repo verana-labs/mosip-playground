@@ -1,0 +1,138 @@
+name: 12_ Deploy Playground (MOSIP showcase)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'playground/**'
+      - '.github/workflows/12_deploy-playground.yml'
+
+jobs:
+  deploy:
+    name: Build and deploy the MOSIP × Verana showcase playground
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_LOGIN }}
+          password: ${{ secrets.DOCKER_HUB_PWD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The showcase has no runtime config (the resolver is queried browser-side),
+      # so there are no build-args or env to inject.
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./playground
+          push: true
+          tags: |
+            veranalabs/mosip-playground:${{ github.sha }}
+            veranalabs/mosip-playground:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.9'
+
+      - name: Deploy
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NAMESPACE="${NS_SECRET:-mosip}"
+          APP_NAME="playground"
+          IMAGE="veranalabs/mosip-playground:${{ github.sha }}"
+          HOST="playground.mosip.testnet.verana.network"
+          PORT=3000
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${APP_NAME}
+            namespace: ${NAMESPACE}
+            labels:
+              app: ${APP_NAME}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ${APP_NAME}
+            template:
+              metadata:
+                labels:
+                  app: ${APP_NAME}
+                annotations:
+                  deploy-timestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              spec:
+                containers:
+                  - name: playground
+                    image: ${IMAGE}
+                    imagePullPolicy: Always
+                    ports:
+                      - containerPort: ${PORT}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${APP_NAME}
+            namespace: ${NAMESPACE}
+          spec:
+            selector:
+              app: ${APP_NAME}
+            ports:
+              - port: ${PORT}
+                targetPort: ${PORT}
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: ${APP_NAME}
+            namespace: ${NAMESPACE}
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+              nginx.ingress.kubernetes.io/enable-cors: "true"
+          spec:
+            ingressClassName: nginx
+            tls:
+              - hosts:
+                  - ${HOST}
+                secretName: ${APP_NAME}-tls
+            rules:
+              - host: ${HOST}
+                http:
+                  paths:
+                    - path: /
+                      pathType: Prefix
+                      backend:
+                        service:
+                          name: ${APP_NAME}
+                          port:
+                            number: ${PORT}
+          EOF
+
+          kubectl rollout status deployment/"${APP_NAME}" -n "$NAMESPACE" --timeout=300s
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## MOSIP × Verana Playground" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **URL:** https://playground.mosip.testnet.verana.network" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** veranalabs/mosip-playground:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
