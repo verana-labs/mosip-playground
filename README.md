@@ -1,113 +1,158 @@
-# Verana Demos
+<p align="center">
+  <img src="docs/assets/mosip-x-verana.png" alt="MOSIP × Verana" width="440">
+</p>
 
-Demo ecosystem with five Verifiable Services and an interactive playground, deployed via GitHub Actions to Kubernetes.
+<h1 align="center">MOSIP × Verana</h1>
 
-## Architecture
+<p align="center"><b>Verifiable trust for MOSIP Inji credentials, on the Verana Trust Network.</b></p>
+
+<p align="center">
+  Real MOSIP <a href="https://docs.inji.io/">Inji</a> components, a thin Verana trust layer on top, no forks.<br>
+  A valid signature proves a credential is <i>authentic</i>. Verana proves the issuer and verifier are <i>legitimate</i>.
+</p>
+
+---
+
+## Why this exists
+
+A digitally signed credential tells you the data wasn't tampered with. It does **not** tell you whether the
+issuer is a real, accredited authority, or whether the verifier asking for your data is one you should trust.
+That gap is where fraud and over-collection live.
+
+This repository wires the **Verana Trust Network** into the **MOSIP Inji** stack so that, at every point in the
+credential lifecycle, a participant can ask the chain *"is this party actually trusted, and authorized for this
+exact credential?"* and get a fail-closed answer, before anything sensitive is issued, presented, or accepted.
+
+It is built and run as a public pilot on the Verana testnet (`vna-testnet-1`) under a demonstration ecosystem,
+the **MOSIP Pilot Authority**.
+
+## The four phases
+
+Each phase is a real, deployed, independently verifiable step. The deep design → runbook → live-state write-up
+for each lives in [`docs/`](docs/).
+
+| Phase | What it proves | Built on | Docs |
+|---|---|---|---|
+| **0 — Issuer** | Inji Certify issues a **Foundational Resident ID** credential under the MOSIP Pilot Authority's trust registry; it resolves as TRUSTED + an authorized issuer. | Inji Certify + eSignet | [PHASE-0](docs/PHASE-0.md) |
+| **1 — Verify the issuer** | Inji Verify checks the credential, then a Verana add-on shows *who issued it and whether they're accredited* — fail-closed on untrusted/unauthorized. | Inji Verify (verify-service + UI) | [PHASE-1](docs/PHASE-1.md) |
+| **2 — Protect the holder** | Before an Inji Web wallet presents a credential over OpenID4VP, it asks Verana whether the **relying party** is a trusted, authorized verifier, and **blocks** unknown or over-asking verifiers. | Inji Web wallet + eSignet | [PHASE-2](docs/PHASE-2.md) |
+| **3 — Governance & economics** | A **grantor** accredits a second issuer with no transaction from the ecosystem root; trust deposits, issuance/verification **fees + permission sessions**, slashing, revocation, an **EGF**, and a **second ecosystem** are all exercised on-chain. | Verana chain (`veranad`) | [PHASE-3](docs/PHASE-3.md) |
+
+The trust triangle the phases close:
 
 ```
-organization-vs          ← Parent organization (ECS credentials, Trust Registry, schema)
-├── issuer-chatbot-vs    ← Issues credentials via DIDComm chatbot
-├── issuer-web-vs        ← Issues credentials via web form + QR code
-├── verifier-chatbot-vs  ← Verifies credentials via DIDComm chatbot
-├── verifier-web-vs      ← Verifies credentials via web page + QR code
-└── playground           ← Interactive tutorial that ties all services together
+            issuer  ──issues──▶  holder  ──presents──▶  verifier
+              ▲                    ▲                       ▲
+        is it accredited?   am I protected?        is it authorized?
+        (Phase 0/1)         (Phase 2)              (Phase 2)
+                         all governed + accountable (Phase 3)
 ```
 
-**organization-vs** is the parent: it obtains Organization + Service credentials from the ECS Trust Registry, creates its own Trust Registry with a custom schema, and registers an AnonCreds credential definition.
+## Architecture: official Inji + a thin Verana add-on
 
-Child services obtain a **Service credential** from organization-vs, then:
-- **Issuers** obtain an ISSUER permission (VP flow) for the organization-vs schema
-- **Verifiers** self-create a VERIFIER permission (OPEN mode)
+The guiding principle is **integrate, don't fork**. Every MOSIP component runs from its official image,
+unmodified. Verana trust is layered on as additive pieces:
 
-All services discover the **AnonCreds credential definition** by querying `/resources?resourceType=anonCredsCredDef` on the public endpoint of organization-vs.
-
-## Services
-
-| Service | Role | App Port |
-|---------|------|----------|
-| `organization-vs` | Parent org | — |
-| `issuer-chatbot-vs` | Issuer (chatbot) | 4000 |
-| `issuer-web-vs` | Issuer (web) | 4001 |
-| `verifier-chatbot-vs` | Verifier (chatbot) | 4002 |
-| `verifier-web-vs` | Verifier (web) | 4003 |
-| `playground` | Interactive tutorial | 3000 |
-
-## Directory Structure
+- **Browser-side trust widgets** that hook the Inji UI's network calls and render a trust verdict
+  (the Inji Verify trust panel, the Inji Web wallet gate), and
+- **On-chain registration + a Trust Resolver** the components consult.
 
 ```
-<service>/
-  config.env            # All configuration for this service
-  deployment.yaml       # Helm chart values for K8s deployment
-  ids.env               # Persisted IDs (credential def, schema, etc.)
-  schema.json           # (organization-vs only) Custom credential schema
-  data/                 # Claim data for credential issuance
-  scripts/
-    setup.sh            # Full local setup (deploy agent, get credentials, etc.)
-    start.sh            # Start the application (child services only)
-  docker/
-    docker-compose.yml  # Local dev containers (VS Agent + app)
-  <app>/                # Application source (TypeScript, child services only)
-    src/
-    Dockerfile
-    package.json
-    tsconfig.json
+   MOSIP Pilot Authority  ──  Verana Trust Registry 167  ──  Foundational Resident ID schema (241)
+            │                              │
+   ┌────────┴─────────┐          Verana Trust Resolver  (resolver.testnet.verana.network)
+   ▼                  ▼            Q1 resolve · Q2 issuer-auth · Q3 verifier-auth
+ Inji Certify       Inji Verify  ◀── trust panel add-on
+ (issuer)           Inji Web     ◀── verify-the-verifier gate add-on
+                    eSignet (auth-code AS for wallet download)
 ```
 
-## GitHub Actions Workflows
+| Component | Role | Live endpoint |
+|---|---|---|
+| `organization-vs` | MOSIP Pilot Authority (trust registry, schema, ECS) | `organization-vs.mosip.testnet.verana.network` |
+| `inji-certify-vs` | Issuer — Inji Certify | `inji-certify-vs.mosip.testnet.verana.network` |
+| `verify-service-vs` | Inji Verify backend + the Verana verifier DID | `inji-verify.mosip.testnet.verana.network` |
+| `inji-verify-ui` | Inji Verify UI + Verana trust panel | `inji-verify-ui.mosip.testnet.verana.network` |
+| `esignet-vs` | eSignet (OIDC AS for the wallet download flow) | `esignet-vs.mosip.testnet.verana.network` · UI `esignet-ui-vs…` |
+| `inji-web-vs` | Inji Web wallet + the `verana-vp-gate` add-on | runs locally (see [PHASE-2](docs/PHASE-2.md)) |
+| Verana Trust Resolver | Trust evaluation consumed by the above | `resolver.testnet.verana.network/v1/trust` |
 
-Workflows are numbered to indicate deployment order. **Run them in order** when setting up a new ecosystem.
+The Trust Resolver answers three questions, and the integration **fails closed** on all of them:
 
-| # | Workflow | Steps |
-|---|---------|-------|
-| 1 | Deploy Organization VS | `deploy` · `get-ecs-credentials` · `create-trust-registry` · `all` |
-| 2 | Deploy Issuer Chatbot VS | `deploy` · `get-credentials` · `deploy-chatbot` · `all` |
-| 3 | Deploy Verifier Chatbot VS | `deploy` · `get-credentials` · `deploy-chatbot` · `all` |
-| 4 | Deploy Issuer Web VS | `deploy` · `get-credentials` · `deploy-web` · `all` |
-| 5 | Deploy Verifier Web VS | `deploy` · `get-credentials` · `deploy-web` · `all` |
-| 6 | Deploy Playground | Build & deploy (single step) |
+- **Q1 `resolve`** — is this DID a trusted entity in the network?
+- **Q2 `issuer-authorization`** — is this issuer authorized for this exact credential type?
+- **Q3 `verifier-authorization`** — is this verifier authorized to request it?
 
-### Deployment
+## See it working
 
-1. Create a branch: `vs/testnet-<name>` or `vs/devnet-<name>`
-2. Edit each service's `config.env` and `deployment.yaml` as needed
-3. Run workflows **in order** from GitHub Actions (manual dispatch)
+No setup required, these are live:
 
-### Ingresses
+- **Verify a credential:** open [inji-verify-ui.mosip.testnet.verana.network](https://inji-verify-ui.mosip.testnet.verana.network),
+  scan/upload a Resident ID QR, and watch the **MOSIP Inji Verify** result appear alongside the **Verana Trust
+  Network** panel (accredited issuer vs. "valid signature, untrusted issuer").
+- **Ask the resolver yourself:**
 
-- `<did-domain>` — VS Agent public endpoint (DID document, DIDComm, resources)
-- `app.<did-domain>` — Web/chatbot application (child services)
-- `playground.<vsname>.demos.<network>.verana.network` — Playground
+  ```bash
+  curl -sG https://resolver.testnet.verana.network/v1/trust/issuer-authorization \
+    --data-urlencode 'did=did:web:inji-certify-vs.mosip.testnet.verana.network' \
+    --data-urlencode 'vtjscId=https://organization-vs.mosip.testnet.verana.network/vt/schemas-resident-id-jsc.json'
+  # -> {"authorized": true, ...}
+  ```
 
-## Local Development
+- **The holder-protection wallet gate** (Phase 2) is demonstrated in a local Inji Web wallet; the full
+  walk-through is in [PHASE-2](docs/PHASE-2.md).
 
-### 1. Start organization-vs
+## Repository layout
 
-```bash
-source organization-vs/config.env
-./organization-vs/scripts/setup.sh
+```
+organization-vs/      MOSIP Pilot Authority: trust registry, schema, ECS credentials
+inji-certify-vs/      Phase 0 — Inji Certify issuer (config + deploy)
+verify-service-vs/    Phase 1 — Inji Verify backend + the verifier did:web edge
+inji-verify-ui/       Phase 1 — Inji Verify UI + public/verana-trust-panel.js add-on
+esignet-vs/           Phase 2 — eSignet (OIDC AS) + mock identities + wallet client
+inji-web-vs/          Phase 2 — Inji Web wallet image + public/verana-vp-gate.js add-on
+common/               Shared shell helpers (network config, veranad, VS Agent API)
+docs/                 PHASE-0..3 design/runbook/state + this README's assets
 ```
 
-### 2. Start a child service (e.g., issuer-chatbot-vs)
+> This repo is forked from [`verana-demos`](https://github.com/hologram-verifiable-services/verana-demos).
+> The inherited AnonCreds services (`issuer-chatbot-vs`, `issuer-web-vs`, `verifier-chatbot-vs`,
+> `verifier-web-vs`, `playground/`) are the upstream base and are **not** part of the MOSIP integration;
+> `playground/` is the seed for the hosted showcase UI ([issue #2](https://github.com/verana-labs/mosip-playground/issues/2)).
 
-```bash
-source issuer-chatbot-vs/config.env
-./issuer-chatbot-vs/scripts/setup.sh
-./issuer-chatbot-vs/scripts/start.sh
-```
+## Deploy
 
-> **Note:** Only one ngrok tunnel can run at a time on the free plan. For local development with multiple services, deploy organization-vs to K8s first, then point child services to its public URL via `ORG_VS_PUBLIC_URL` and `ORG_VS_ADMIN_URL`.
+Deployment is **push-to-`main`, path-filtered per service** (GitHub Actions → OVH Kubernetes, namespace
+`mosip`). Editing a service's directory and pushing redeploys only that service.
 
-## Shared Code
+| Workflow | Service | Trigger path |
+|---|---|---|
+| `1_deploy-organization-vs` | MOSIP Pilot Authority | `workflow_dispatch` (bootstrap) |
+| `7_deploy-inji-certify-vs` | Inji Certify | `inji-certify-vs/**` |
+| `9_deploy-verify-service` | Inji Verify backend | `verify-service-vs/**` |
+| `10_deploy-inji-verify-ui` | Inji Verify UI | `inji-verify-ui/**` |
+| `11_deploy-esignet-vs` | eSignet | `esignet-vs/**` |
 
-- `common/common.sh` — Shared shell helpers (logging, network config, VS Agent API, schema discovery, credential issuance/linking, CLI account setup)
+(Workflows `2`–`6` belong to the inherited verana-demos base.)
 
-## Playground
+## Status & known limitations
 
-The playground (`playground/`) is a Next.js + TailwindCSS single-page application that guides newcomers through the Verifiable Trust ecosystem. It lets users issue and present credentials in real time using the demo services above.
+Phases **0–3 are complete and validated** against the live testnet (phases 0/1 deployed; phase 2 proven
+end-to-end in a local wallet; phase 3 fully on-chain). Two honest caveats:
 
-- **Framework:** Next.js (standalone output) + TailwindCSS
-- **API proxies:** Server-side API routes forward requests to internal cluster services (issuer-chatbot, verifier-chatbot, verifier-web)
-- **Issuer Web:** Opens in a new tab (the user fills a form, then scans the QR code generated on that page)
-- **Deployment:** Workflow #6 builds a Docker image and deploys it to the same namespace as the other services
+- **Revocation → resolver (Phase 3e).** On-chain revocation is correct and immediate, but the deployed
+  Trust Resolver library (`verre@0.2.5`) validates a permission by its type and effective window and does
+  **not** check the `revoked` flag, so a revoked issuer/verifier keeps resolving as authorized. Filed
+  upstream as [`verana-labs/verre#107`](https://github.com/verana-labs/verre/issues/107); no change needed
+  in this repo once it lands.
+- **Local wallet PDF export ([#10](https://github.com/verana-labs/mosip-playground/issues/10)).** Exporting a
+  stored card to PDF needs `datashare-service`, which isn't in the minimal local stack. Unrelated to the trust
+  integration.
 
-See [`spec-playground.md`](spec-playground.md) for the full specification.
+## Links
+
+- **Verana** — [docs](https://docs.verana.io) · [spec](https://github.com/verana-labs/verana-spec) · [Trust Resolver](https://github.com/verana-labs/verre)
+- **MOSIP Inji** — [docs](https://docs.inji.io) · [Inji Certify](https://docs.inji.io/inji-certify) · [Inji Verify](https://docs.inji.io/inji-verify) · [Inji Web](https://docs.inji.io/inji-web)
+- **This integration** — phase write-ups in [`docs/`](docs/); the parent analysis + specs live in
+  [`verana-labs/integration-sandbox`](https://github.com/verana-labs/integration-sandbox) under `mosip/`.
+</content>
