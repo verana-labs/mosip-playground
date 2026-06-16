@@ -108,11 +108,11 @@ flowchart TB
 | `verify-service-vs` | Inji Verify backend + the Verana verifier DID | API under `inji-verify.mosip.testnet.verana.network/v1/verify` (e.g. `…/did.json`) |
 | `inji-verify-ui` | Inji Verify UI + Verana trust panel — **the page to open** | `inji-verify-ui.mosip.testnet.verana.network` |
 | `esignet-vs` | eSignet (OIDC AS for the wallet download flow) | API under `esignet-vs.mosip.testnet.verana.network/v1/esignet` · login UI `esignet-ui-vs…` |
-| `inji-web-vs` | Inji Web wallet + the `verana-vp-gate` add-on | runs locally (see [PHASE-2](docs/PHASE-2.md)) |
+| `inji-web-vs` | Inji Web wallet + the `verana-vp-gate` add-on — **the holder wallet** | `inji-web.mosip.testnet.verana.network` |
 | Verana Trust Resolver | Trust evaluation consumed by the above | `resolver.testnet.verana.network/v1/trust` |
 
 > [!NOTE]
-> Only the UIs (`inji-verify-ui`, `esignet-ui-vs`) render in a browser; the rest are APIs/backends, so their
+> Only the UIs (`inji-verify-ui`, `inji-web`, `esignet-ui-vs`) render in a browser; the rest are APIs/backends, so their
 > bare hostnames aren't meant to be opened directly.
 
 The Trust Resolver answers three questions, and the integration **fails closed** on all of them:
@@ -154,8 +154,10 @@ curl -sG https://resolver.testnet.verana.network/v1/trust/issuer-authorization \
 # -> {"authorized": true, ...}
 ```
 
-The holder-protection wallet gate (Phase 2) is demonstrated in a local Inji Web wallet; the full walk-through
-is in [PHASE-2](docs/PHASE-2.md).
+- **Hold & present a credential** in the hosted **[Inji Web wallet](https://inji-web.mosip.testnet.verana.network)** — sign
+  in, download the Foundational Resident ID, and the `verana-vp-gate` add-on checks the relying party against Verana
+  (Q1 + Q3) and blocks unknown or over-asking verifiers before anything is shared. The Phase-2 walk-through is in
+  [PHASE-2](docs/PHASE-2.md).
 
 ## Repository layout
 
@@ -165,7 +167,7 @@ inji-certify-vs/      Phase 0 — Inji Certify issuer (config + deploy)
 verify-service-vs/    Phase 1 — Inji Verify backend + the verifier did:web edge
 inji-verify-ui/       Phase 1 — Inji Verify UI + public/verana-trust-panel.js add-on
 esignet-vs/           Phase 2 — eSignet (OIDC AS) + mock identities + wallet client
-inji-web-vs/          Phase 2 — Inji Web wallet image + public/verana-vp-gate.js add-on
+inji-web-vs/          Phase 2 — Inji Web wallet (hosted) + mimoto backend + public/verana-vp-gate.js add-on
 playground/           Hosted showcase walkthrough → playground.mosip.testnet.verana.network
 common/               Shared shell helpers (network config, veranad, VS Agent API)
 docs/                 PHASE-0..3 design/runbook/state + assets
@@ -174,8 +176,9 @@ docs/                 PHASE-0..3 design/runbook/state + assets
 > [!NOTE]
 > This repo is forked from [`verana-demos`](https://github.com/hologram-verifiable-services/verana-demos).
 > The inherited AnonCreds services (`issuer-chatbot-vs`, `issuer-web-vs`, `verifier-chatbot-vs`,
-> `verifier-web-vs`, `playground/`) are the upstream base and are **not** part of the MOSIP integration;
-> `playground/` is the seed for the hosted showcase UI ([issue #2](https://github.com/verana-labs/mosip-playground/issues/2)).
+> `verifier-web-vs`) are the upstream base and are **not** part of the MOSIP integration. `playground/` started as
+> that upstream seed and is now the MOSIP × Verana showcase UI ([issue #2](https://github.com/verana-labs/mosip-playground/issues/2)),
+> live at `playground.mosip.testnet.verana.network`.
 
 ## Deploy
 

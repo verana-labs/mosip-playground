@@ -19,7 +19,7 @@ import {
 import SectionHeading from "./components/SectionHeading";
 import ConceptCard from "./components/ConceptCard";
 import ResolverVerdict from "./components/ResolverVerdict";
-import { ECOSYSTEM, INJI_VERIFY_UI } from "./config";
+import { ECOSYSTEM, INJI_VERIFY_UI, INJI_WEB } from "./config";
 
 const components = [
   { name: "MOSIP Pilot Authority", role: "Trust anchor", desc: "Owns the trust registry, the Resident ID schema and the governance framework (EGF).", icon: Building2, color: "text-amber-600 bg-amber-50" },
@@ -161,13 +161,18 @@ export default function PlaygroundPage() {
               <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-blue-600 bg-blue-50">
                 <Wallet className="w-5 h-5" />
               </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                Before the Inji Web wallet presents a credential over OpenID4VP, it asks Verana whether the{" "}
-                <strong>relying party</strong> is a trusted, authorized verifier (the <em>Verifier</em> check in
-                the widget above). The wallet shows the holder <strong>who is asking</strong> and{" "}
-                <strong>defaults to blocking</strong> unknown or over-asking verifiers — so trust is checked
-                before any attribute leaves the device, not after.
-              </p>
+              <div>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Before the hosted Inji Web wallet presents a credential over OpenID4VP, it asks Verana whether the{" "}
+                  <strong>relying party</strong> is a trusted, authorized verifier (the <em>Verifier</em> check in
+                  the widget above). The wallet shows the holder <strong>who is asking</strong> and{" "}
+                  <strong>defaults to blocking</strong> unknown or over-asking verifiers — so trust is checked
+                  before any attribute leaves the device, not after.
+                </p>
+                <a href={INJI_WEB} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors">
+                  Open the Inji Web wallet <ArrowUpRight className="w-4 h-4" />
+                </a>
+              </div>
             </div>
           </div>
         </section>
