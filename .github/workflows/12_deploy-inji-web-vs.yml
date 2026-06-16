@@ -1,0 +1,179 @@
+name: 12_ Deploy Inji Web wallet (holder + verana-vp-gate)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'inji-web-vs/**'
+      - '.github/workflows/12_deploy-inji-web-vs.yml'
+
+jobs:
+  deploy-inji-web-vs:
+    name: Build + deploy inji-web + mimoto (hosted holder wallet)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_LOGIN }}
+          password: ${{ secrets.DOCKER_HUB_PWD }}
+
+      # FROM the official injistack/inji-web image + only the verana-vp-gate add-on (no fork).
+      - name: Build and push wallet image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inji-web-vs
+          push: true
+          platforms: linux/amd64
+          tags: |
+            veranalabs/inji-web:${{ github.sha }}
+            veranalabs/inji-web:mosip
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # ConfigMaps from the repo files (same pattern as the esignet deploy). The mimoto config,
+      # the config-server's served files, both nginx confs, and the mimoto DB init.
+      - name: Create ConfigMaps
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          kubectl create configmap wallet-mimoto-config -n "$NS" \
+            --from-file=mimoto-default.properties=inji-web-vs/config/mimoto-default.properties \
+            --from-file=mimoto-bootstrap.properties=inji-web-vs/config/mimoto-bootstrap.properties \
+            --from-file=mimoto-issuers-config.json=inji-web-vs/config/mimoto-issuers-config.json \
+            --from-file=mimoto-trusted-verifiers.json=inji-web-vs/config/mimoto-trusted-verifiers.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap wallet-config-files -n "$NS" \
+            --from-file=mimoto-issuers-config.json=inji-web-vs/config/mimoto-issuers-config.json \
+            --from-file=mimoto-trusted-verifiers.json=inji-web-vs/config/mimoto-trusted-verifiers.json \
+            --from-file=credential-template.html=inji-web-vs/config/credential-template.html \
+            --from-file=vp_request_config.json=inji-web-vs/config/vp_request_config.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap wallet-config-nginx -n "$NS" \
+            --from-file=wallet-config.conf=inji-web-vs/nginx/wallet-config.conf \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap inji-web-nginx -n "$NS" \
+            --from-file=inji-web.conf=inji-web-vs/nginx/inji-web.conf \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap mimoto-initdb -n "$NS" \
+            --from-file=mimoto_init.sql=inji-web-vs/db/mimoto_init.sql \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Secrets (Google client + mimoto OIDC keystore)
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          WALLET_OIDC_KEYSTORE_B64: ${{ secrets.WALLET_OIDC_KEYSTORE_B64 }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          kubectl create secret generic wallet-google-oauth -n "$NS" \
+            --from-literal=client-id="$GOOGLE_OAUTH_CLIENT_ID" \
+            --from-literal=client-secret="$GOOGLE_OAUTH_CLIENT_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          printf '%s' "$WALLET_OIDC_KEYSTORE_B64" | base64 -d > /tmp/oidckeystore.p12
+          kubectl create secret generic wallet-oidc-keystore -n "$NS" \
+            --from-file=oidckeystore.p12=/tmp/oidckeystore.p12 \
+            --dry-run=client -o yaml | kubectl apply -f -
+          rm -f /tmp/oidckeystore.p12
+
+      # mimoto's keymanager master key lives in the mounted oidckeystore.p12 while its alias rows
+      # live in postgres-mimoto; a fresh DB each deploy keeps them in sync (same lifecycle reason
+      # as esignet). Recreate mimoto + its DB to avoid a stale-alias crashloop.
+      - name: Reset mimoto + its DB (keystore<->DB lifecycle)
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          kubectl delete deployment mimoto postgres-mimoto -n "$NS" --ignore-not-found
+          kubectl wait --for=delete pod -l 'app in (mimoto,postgres-mimoto)' -n "$NS" --timeout=120s || true
+
+      - name: Deploy
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+          IMAGE_SHA: ${{ github.sha }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          kubectl apply -n "$NS" -f inji-web-vs/manifest.yaml
+          # Pin inji-web to the freshly built image (forces a rollout to this exact build).
+          kubectl set image deployment/inji-web inji-web="veranalabs/inji-web:$IMAGE_SHA" -n "$NS"
+          kubectl rollout status deployment/postgres-mimoto -n "$NS" --timeout=180s
+          kubectl rollout status deployment/wallet-config   -n "$NS" --timeout=120s
+          kubectl rollout status deployment/mimoto          -n "$NS" --timeout=480s
+          kubectl rollout status deployment/inji-web        -n "$NS" --timeout=240s
+          echo "Wallet: https://inji-web.mosip.testnet.verana.network"
+
+      # The hosted download callback (inji-web /redirect) must be an allowed redirect on the
+      # eSignet wallet-demo client. client-mgmt PUT is open under the bundled local profile.
+      # Non-fatal: the wallet still loads + logs in if this lags; only the download needs it.
+      - name: Allow the hosted redirect on the eSignet wallet-demo client
+        run: |
+          BASE="https://esignet-vs.mosip.testnet.verana.network/v1/esignet"
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          BODY=$(jq -n --arg t "$NOW" --slurpfile c esignet-vs/clients/wallet-demo.json '{
+            requestTime: $t,
+            request: {
+              clientName: $c[0].clientName,
+              logoUri: $c[0].logoUri,
+              redirectUris: $c[0].redirectUris,
+              userClaims: $c[0].userClaims,
+              authContextRefs: $c[0].authContextRefs,
+              status: "ACTIVE",
+              grantTypes: $c[0].grantTypes,
+              clientAuthMethods: $c[0].clientAuthMethods
+            }}')
+          RESP=$(curl -s -X PUT "$BASE/client-mgmt/oidc-client/wallet-demo" -H 'Content-Type: application/json' -d "$BODY")
+          echo "$RESP" | jq -c '{errors}' || echo "$RESP"
+
+      - name: Smoke test (wallet + mimoto reachable)
+        run: |
+          curl -s -o /dev/null -w "inji-web /        -> %{http_code}\n" https://inji-web.mosip.testnet.verana.network/ || true
+          curl -s -w "mimoto issuers   -> %{http_code}\n" -o /tmp/iss https://inji-web.mosip.testnet.verana.network/v1/mimoto/issuers || true
+          head -c 200 /tmp/iss 2>/dev/null || true; echo
+
+      - name: Debug on failure
+        if: failure()
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          echo "::group::pods"; kubectl get pods -n "$NS" -l 'app in (inji-web,mimoto,postgres-mimoto,wallet-config)' -o wide; echo "::endgroup::"
+          for app in mimoto inji-web postgres-mimoto wallet-config; do
+            echo "::group::logs $app"
+            kubectl logs -n "$NS" -l app=$app --tail=150 2>&1 | tail -120 || true
+            echo "::endgroup::"
+          done
+
+      - name: Summary
+        if: always()
+        env:
+          IMAGE_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "## Inji Web wallet (holder + verana-vp-gate)"
+            echo ""
+            echo "- **Wallet:** https://inji-web.mosip.testnet.verana.network"
+            echo "- **Image:** veranalabs/inji-web:$IMAGE_SHA (FROM injistack/inji-web:0.16.0 + verana-vp-gate)"
+            echo "- **Backend:** mimoto 0.21.0 -> hosted certify + eSignet; Google OAuth account login"
+            echo "- **Holder gate:** blocks unknown / over-asking verifiers before vp_token leaves the wallet (Verana Q1 + Q3)"
+          } >> "$GITHUB_STEP_SUMMARY"

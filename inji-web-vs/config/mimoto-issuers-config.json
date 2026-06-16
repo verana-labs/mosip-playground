@@ -1,0 +1,31 @@
+{
+  "issuers": [
+    {
+      "issuer_id": "VeranaResidentId",
+      "credential_issuer": "VeranaResidentId",
+      "protocol": "OpenId4VCI",
+      "display": [
+        {
+          "name": "Foundational Resident ID",
+          "logo": {
+            "url": "https://raw.githubusercontent.com/verana-labs/mosip-playground/main/inji-web-vs/public/cobrand.png",
+            "alt_text": "mosip-logo"
+          },
+          "title": "Foundational Resident ID",
+          "description": "Download your Foundational Resident ID credential",
+          "language": "en"
+        }
+      ],
+      "client_id": "wallet-demo",
+      "client_alias": "wallet-demo",
+      "redirect_uri": "https://inji-web.mosip.testnet.verana.network/redirect",
+      "token_endpoint": "https://inji-web.mosip.testnet.verana.network/v1/mimoto/get-token/VeranaResidentId",
+      "authorization_audience": "https://esignet-vs.mosip.testnet.verana.network/v1/esignet/oauth/v2/token",
+      "proxy_token_endpoint": "https://esignet-vs.mosip.testnet.verana.network/v1/esignet/oauth/v2/token",
+      "credential_issuer_host": "https://inji-certify-vs.mosip.testnet.verana.network/v1/certify/issuance",
+      "wellknown_endpoint": "https://inji-certify-vs.mosip.testnet.verana.network/v1/certify/issuance/.well-known/openid-credential-issuer",
+      "qr_code_type": "OnlineSharing",
+      "enabled": "true"
+    }
+  ]
+}
