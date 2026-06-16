@@ -104,6 +104,21 @@ spec:
   template:
     metadata: { labels: { app: mimoto } }
     spec:
+      # mimoto runs as root (matches the official compose `user: root`) so the keymanager can
+      # write its master key into the keystore copy below.
+      securityContext:
+        runAsUser: 0
+      initContainers:
+        # The keymanager generates its master key INTO oidckeystore.p12 at boot, so the file must
+        # be writable. A Secret mount is read-only, so copy it into a writable emptyDir first; the
+        # OIDC client key (the eSignet client assertion) is a separate alias and is preserved.
+        # A fresh master key each deploy matches the ephemeral postgres-mimoto.
+        - name: copy-keystore
+          image: busybox:1.36
+          command: ["sh", "-c", "cp /secret/oidckeystore.p12 /certs/oidckeystore.p12"]
+          volumeMounts:
+            - { name: keystore-secret, mountPath: /secret, readOnly: true }
+            - { name: certs, mountPath: /certs }
       containers:
         - name: mimoto
           image: injistack/mimoto:0.21.0
@@ -138,12 +153,14 @@ spec:
             - { name: config, mountPath: /home/mosip/mimoto-bootstrap.properties, subPath: mimoto-bootstrap.properties }
             - { name: config, mountPath: /home/mosip/mimoto-issuers-config.json, subPath: mimoto-issuers-config.json }
             - { name: config, mountPath: /home/mosip/mimoto-trusted-verifiers.json, subPath: mimoto-trusted-verifiers.json }
-            - { name: keystore, mountPath: /home/mosip/certs/oidckeystore.p12, subPath: oidckeystore.p12 }
+            - { name: certs, mountPath: /home/mosip/certs }
       volumes:
         - name: config
           configMap: { name: wallet-mimoto-config }
-        - name: keystore
+        - name: keystore-secret
           secret: { secretName: wallet-oidc-keystore }
+        - name: certs
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
