@@ -27,6 +27,7 @@
   ],
   "logoUri": "https://api.collab.mosip.net/inji/mosip-logo.png",
   "redirectUris": [
+    "https://inji-web.mosip.testnet.verana.network/redirect",
     "http://localhost:3004/redirect",
     "io.mosip.residentapp.inji://oauthredirect"
   ],

@@ -1,0 +1,218 @@
+# inji-web-vs — hosts the MOSIP Inji Web browser wallet + our verana-vp-gate add-on and its mimoto
+# backend on k8s, so the Phase-2 holder-protection gate is publicly usable (not just local).
+# Certify (inji-certify-vs) and eSignet (esignet-vs) are already hosted; this deploy adds:
+#   inji-web (SPA + gate)  ->  mimoto (:8099)  ->  hosted certify + eSignet
+#   mimoto  ->  postgres-mimoto (own DB)  +  wallet-config (serves issuers-config over HTTP)
+#   mimoto  ->  datashare-service (:8097, PDF export #10)   [added in a follow-up manifest piece]
+# Single public host inji-web.mosip.testnet.verana.network; inji-web's nginx proxies /v1/mimoto/
+# to mimoto — which also carries the Google OAuth callback, since that lives under mimoto's
+# /v1/mimoto context path. ConfigMaps (config, db init, nginx) + secrets (oidc keystore, google
+# client) are created by workflow 12 from inji-web-vs/{config,db,nginx}/ and GH secrets, exactly
+# like the esignet deploy.
+---
+# mimoto's own DB (inji_mimoto / schema mimoto), init from mimoto_init.sql. Ephemeral on purpose:
+# the keymanager master key sits in the mounted oidckeystore.p12 while its alias rows live here, so
+# a fresh DB each deploy keeps them in sync (same lifecycle reasoning as esignet's postgres).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-mimoto
+  labels: { app: postgres-mimoto }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres-mimoto } }
+  template:
+    metadata: { labels: { app: postgres-mimoto } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_PASSWORD, value: postgres }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [ { containerPort: 5432 } ]
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d }
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: initdb
+          configMap: { name: mimoto-initdb }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres-mimoto }
+spec:
+  selector: { app: postgres-mimoto }
+  ports: [ { port: 5432, targetPort: 5432 } ]
+---
+# wallet-config: tiny nginx serving the mimoto config files over HTTP at /config/server. mimoto's
+# bootstrap points config.server.file.storage.uri here to fetch mimoto-issuers-config.json etc.
+# (the certify-nginx role from the local compose, minus the certify proxy — certify is hosted).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-config
+  labels: { app: wallet-config }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: wallet-config } }
+  template:
+    metadata: { labels: { app: wallet-config } }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:stable
+          ports: [ { containerPort: 80 } ]
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+          volumeMounts:
+            - { name: conf, mountPath: /etc/nginx/conf.d/default.conf, subPath: wallet-config.conf }
+            - { name: files, mountPath: /config/server }
+      volumes:
+        - name: conf
+          configMap: { name: wallet-config-nginx }
+        - name: files
+          configMap: { name: wallet-config-files }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: wallet-config }
+spec:
+  selector: { app: wallet-config }
+  ports: [ { port: 80, targetPort: 80 } ]
+---
+# mimoto: the wallet backend. Reaches hosted certify + eSignet (via the mounted issuers-config),
+# postgres-mimoto, wallet-config, and datashare-service. The Google client + oidc keystore come
+# from secrets. server.forward-headers-strategy=framework (set in mimoto-default.properties) makes
+# the OAuth {baseUrl} resolve to the public https host behind the inji-web nginx.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mimoto
+  labels: { app: mimoto }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: mimoto } }
+  template:
+    metadata: { labels: { app: mimoto } }
+    spec:
+      containers:
+        - name: mimoto
+          image: injistack/mimoto:0.21.0
+          ports: [ { containerPort: 8099 } ]
+          env:
+            - { name: container_user, value: mosip }
+            - { name: active_profile_env, value: default }
+            - { name: SPRING_CONFIG_NAME, value: mimoto }
+            - { name: SPRING_CONFIG_LOCATION, value: /home/mosip/ }
+            - { name: SPRING_CLOUD_BOOTSTRAP_LOCATION, value: /home/mosip/mimoto-bootstrap.properties }
+            - { name: oidc_p12_password, value: xy4gh6swa2i }
+            - { name: WALLET_BINDING_PARTNER_API_KEY, value: dummywalletbindingpartnerapikey }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres-mimoto:5432/inji_mimoto" }
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_PASSWORD, value: postgres }
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: wallet-google-oauth, key: client-id } }
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: wallet-google-oauth, key: client-secret } }
+          resources:
+            requests: { cpu: 250m, memory: 1Gi }
+            limits: { cpu: "1500m", memory: 3Gi }
+          # Health is unreliable on this minimal stack (no redis); the issuers endpoint returning
+          # 200 is the real readiness signal (it also proves the issuers-config loaded).
+          readinessProbe:
+            httpGet: { path: /v1/mimoto/issuers, port: 8099 }
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 40
+          volumeMounts:
+            - { name: config, mountPath: /home/mosip/mimoto-default.properties, subPath: mimoto-default.properties }
+            - { name: config, mountPath: /home/mosip/mimoto-bootstrap.properties, subPath: mimoto-bootstrap.properties }
+            - { name: config, mountPath: /home/mosip/mimoto-issuers-config.json, subPath: mimoto-issuers-config.json }
+            - { name: config, mountPath: /home/mosip/mimoto-trusted-verifiers.json, subPath: mimoto-trusted-verifiers.json }
+            - { name: keystore, mountPath: /home/mosip/certs/oidckeystore.p12, subPath: oidckeystore.p12 }
+      volumes:
+        - name: config
+          configMap: { name: wallet-mimoto-config }
+        - name: keystore
+          secret: { secretName: wallet-oidc-keystore }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mimoto }
+spec:
+  selector: { app: mimoto }
+  ports: [ { port: 8099, targetPort: 8099 } ]
+---
+# inji-web: the official wallet SPA + our verana-vp-gate (image built by workflow 12 from
+# inji-web-vs/Dockerfile). Its nginx serves the SPA and proxies /v1/mimoto/ (API + the Google OAuth
+# callback under mimoto's context path) to mimoto. MIMOTO_URL is the public same-origin base.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inji-web
+  labels: { app: inji-web }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: inji-web } }
+  template:
+    metadata: { labels: { app: inji-web } }
+    spec:
+      containers:
+        - name: inji-web
+          image: veranalabs/inji-web:mosip
+          imagePullPolicy: Always
+          ports: [ { containerPort: 3004 } ]
+          env:
+            - { name: DEFAULT_LANG, value: en }
+            - { name: MIMOTO_URL, value: "https://inji-web.mosip.testnet.verana.network/v1/mimoto" }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 300m, memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /, port: 3004 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 20
+          volumeMounts:
+            - { name: nginx, mountPath: /etc/nginx/conf.d/default.conf, subPath: inji-web.conf }
+      volumes:
+        - name: nginx
+          configMap: { name: inji-web-nginx }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: inji-web }
+spec:
+  selector: { app: inji-web }
+  ports: [ { port: 3004, targetPort: 3004 } ]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inji-web-vs
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [inji-web.mosip.testnet.verana.network]
+      secretName: inji-web.mosip.testnet.verana.network-cert
+  rules:
+    - host: inji-web.mosip.testnet.verana.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: inji-web, port: { number: 3004 } }
