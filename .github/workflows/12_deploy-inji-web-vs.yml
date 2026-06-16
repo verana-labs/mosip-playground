@@ -78,6 +78,10 @@ jobs:
           kubectl create configmap mimoto-initdb -n "$NS" \
             --from-file=mimoto_init.sql=inji-web-vs/db/mimoto_init.sql \
             --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap wallet-datashare-config -n "$NS" \
+            --from-file=data-share-inji-default.properties=inji-web-vs/config/data-share-inji-default.properties \
+            --from-file=data-share-standalone.properties=inji-web-vs/config/data-share-standalone.properties \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create Secrets (Google client + mimoto OIDC keystore)
         env:
@@ -121,6 +125,10 @@ jobs:
           kubectl rollout status deployment/wallet-config   -n "$NS" --timeout=120s
           kubectl rollout status deployment/mimoto          -n "$NS" --timeout=480s
           kubectl rollout status deployment/inji-web        -n "$NS" --timeout=240s
+          # minio + datashare last, so a datashare hiccup can't mask wallet readiness (mimoto only
+          # calls datashare on PDF export, not at startup).
+          kubectl rollout status deployment/minio           -n "$NS" --timeout=180s
+          kubectl rollout status deployment/datashare       -n "$NS" --timeout=300s
           echo "Wallet: https://inji-web.mosip.testnet.verana.network"
 
       # The hosted download callback (inji-web /redirect) must be an allowed redirect on the
