@@ -3,6 +3,7 @@
 
 export const RESOLVER = "https://resolver.testnet.verana.network/v1/trust";
 export const INJI_VERIFY_UI = "https://inji-verify-ui.mosip.testnet.verana.network";
+export const INJI_WEB = "https://inji-web.mosip.testnet.verana.network";
 
 export const ECOSYSTEM = {
   name: "MOSIP Pilot Authority",
