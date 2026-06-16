@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/verana-labs/mosip-playground/compare/v1.2.0...v1.3.0) (2026-06-16)
+
+
+### Features
+
+* [mosip] datashare-service + minio for wallet PDF export ([#10](https://github.com/verana-labs/mosip-playground/issues/10)) ([#19](https://github.com/verana-labs/mosip-playground/issues/19)) ([dd9b285](https://github.com/verana-labs/mosip-playground/commit/dd9b28505719fa2a862a94e3d880d4d8d87aa263))
+* [mosip] host the inji-web holder wallet + verana-vp-gate ([#15](https://github.com/verana-labs/mosip-playground/issues/15)) ([37ce61f](https://github.com/verana-labs/mosip-playground/commit/37ce61f7bb22201fd01c032dbe40d7b085b6ada9))
+
+
+### Bug Fixes
+
+* [mosip] mimoto keystore must be writable (initContainer copy + run as root) ([#17](https://github.com/verana-labs/mosip-playground/issues/17)) ([6784f98](https://github.com/verana-labs/mosip-playground/commit/6784f9860df56407cfe6ae377f6d47c3af24bb11))
+
 ## [1.2.0](https://github.com/verana-labs/mosip-playground/compare/v1.1.0...v1.2.0) (2026-06-15)
 
 
