@@ -1,84 +1,23 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import {
-  BadgeCheck,
-  ShieldX,
-  ShieldAlert,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
-import { RESOLVER, SUBJECTS, type Subject } from "../config";
-
-type Result = {
-  trustStatus?: string;
-  authorized?: boolean;
-  error?: string;
-};
-
-type Verdict = {
-  tone: "ok" | "warn" | "bad" | "unknown";
-  title: string;
-  detail: string;
-  Icon: typeof BadgeCheck;
-};
-
-function verdictFor(s: Subject, r: Result): Verdict {
-  if (r.error)
-    return { tone: "unknown", title: "Resolver unreachable", detail: r.error, Icon: ShieldAlert };
-  const trusted = r.trustStatus === "TRUSTED";
-  const role = s.kind === "issuer" ? "issuer" : "verifier";
-  if (!trusted)
-    return {
-      tone: "bad",
-      title: s.kind === "issuer" ? "Untrusted issuer" : "Untrusted verifier",
-      detail:
-        "Not a trusted participant of the Verana Trust Network. A valid signature proves authenticity, not legitimacy.",
-      Icon: ShieldX,
-    };
-  if (r.authorized)
-    return {
-      tone: "ok",
-      title: s.kind === "issuer" ? "Accredited issuer" : "Authorized verifier",
-      detail: `Trusted Verifiable Service with an active accreditation as ${role} for this credential on the Verana Trust Network.`,
-      Icon: BadgeCheck,
-    };
-  return {
-    tone: "warn",
-    title: "Trusted — but not accredited for this credential",
-    detail: `A trusted service, but not authorized to act as ${role} for this credential type.`,
-    Icon: ShieldAlert,
-  };
-}
-
-const TONE: Record<Verdict["tone"], { bar: string; chip: string; text: string }> = {
-  ok: { bar: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700", text: "text-emerald-700" },
-  warn: { bar: "bg-amber-500", chip: "bg-amber-50 text-amber-700", text: "text-amber-700" },
-  bad: { bar: "bg-rose-500", chip: "bg-rose-50 text-rose-700", text: "text-rose-700" },
-  unknown: { bar: "bg-gray-400", chip: "bg-gray-100 text-gray-600", text: "text-gray-600" },
-};
-
-async function resolve(s: Subject, signal: AbortSignal): Promise<Result> {
-  const did = encodeURIComponent(s.did);
-  const vtjsc = encodeURIComponent(s.vtjsc);
-  const authPath = s.kind === "issuer" ? "issuer-authorization" : "verifier-authorization";
-  const [q1, q2] = await Promise.all([
-    fetch(`${RESOLVER}/resolve?did=${did}`, { signal }).then((r) => r.json()),
-    fetch(`${RESOLVER}/${authPath}?did=${did}&vtjscId=${vtjsc}`, { signal }).then((r) => r.json()),
-  ]);
-  return { trustStatus: q1?.trustStatus, authorized: q2?.authorized === true };
-}
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { SUBJECTS, type Subject } from "../config";
+import { checkTrust, verdictFor, TONE, type TrustResult } from "../lib/trust";
 
 export default function ResolverVerdict() {
   const [active, setActive] = useState<Subject>(SUBJECTS[0]);
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<TrustResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const acRef = useRef<AbortController | null>(null);
 
-  // Each run owns an AbortController: switching subjects aborts the previous
-  // request (so a slow earlier response can't land under the new subject's
-  // labels), and a timeout aborts a stalled socket.
+  // One live AbortController in a ref: switching subjects or a manual re-check
+  // aborts the previous request and supersedes it, so a slow earlier response
+  // can't land under the new subject's labels. A timeout aborts a stalled socket.
   const run = useCallback((s: Subject) => {
+    acRef.current?.abort();
     const ac = new AbortController();
+    acRef.current = ac;
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -86,29 +25,28 @@ export default function ResolverVerdict() {
     }, 8000);
     setLoading(true);
     setResult(null);
-    resolve(s, ac.signal).then(
+    checkTrust(s, ac.signal).then(
       (r) => {
         clearTimeout(timer);
-        if (ac.signal.aborted && !timedOut) return; // superseded by a newer request
+        if (acRef.current !== ac) return; // superseded by a newer request
         setResult(r);
         setLoading(false);
       },
       (e: unknown) => {
         clearTimeout(timer);
-        if (ac.signal.aborted && !timedOut) return;
+        if (acRef.current !== ac) return;
         setResult({ error: timedOut ? "Resolver timed out" : e instanceof Error ? e.message : "network error" });
         setLoading(false);
       },
     );
-    return ac;
   }, []);
 
   useEffect(() => {
-    const ac = run(active);
-    return () => ac.abort();
+    run(active);
+    return () => acRef.current?.abort();
   }, [active, run]);
 
-  const verdict = result ? verdictFor(active, result) : null;
+  const verdict = result ? verdictFor(active.kind, result) : null;
   const tone = verdict ? TONE[verdict.tone] : TONE.unknown;
 
   return (
@@ -160,13 +98,13 @@ export default function ResolverVerdict() {
                   <dd className="font-mono text-gray-700 break-all">{active.did}</dd>
                   <dt className="text-gray-400">Q1 · resolve</dt>
                   <dd className="text-gray-700">
-                    trustStatus: <span className="font-medium">{result?.trustStatus ?? "—"}</span>
+                    trustStatus: <span className="font-medium">{result?.trustStatus ?? ", "}</span>
                   </dd>
                   <dt className="text-gray-400">
                     {active.kind === "issuer" ? "Q2 · issuer-auth" : "Q3 · verifier-auth"}
                   </dt>
                   <dd className="text-gray-700">
-                    authorized: <span className="font-medium">{String(result?.authorized ?? "—")}</span>
+                    authorized: <span className="font-medium">{String(result?.authorized ?? ", ")}</span>
                   </dd>
                 </dl>
               </>

@@ -5,11 +5,7 @@ import {
   ScrollText,
   ShieldCheck,
   BadgeCheck,
-  Building2,
-  FileCheck2,
-  Wallet,
   KeyRound,
-  Network,
   ArrowDown,
   ArrowUpRight,
   Coins,
@@ -18,23 +14,28 @@ import {
 } from "lucide-react";
 import SectionHeading from "./components/SectionHeading";
 import ConceptCard from "./components/ConceptCard";
+import TrustCard from "./components/TrustCard";
+import TrustDiagram from "./components/TrustDiagram";
+import PermissionTree from "./components/PermissionTree";
+import SchemaCard from "./components/SchemaCard";
+import IssueButton from "./components/IssueButton";
 import ResolverVerdict from "./components/ResolverVerdict";
-import { ECOSYSTEM, INJI_VERIFY_UI, INJI_WEB } from "./config";
-
-const components = [
-  { name: "MOSIP Pilot Authority", role: "Trust anchor", desc: "Owns the trust registry, the Resident ID schema and the governance framework (EGF).", icon: Building2, color: "text-amber-600 bg-amber-50" },
-  { name: "Inji Certify", role: "Issuer · Phase 0", desc: "Issues the Foundational Resident ID as a Verifiable Credential.", icon: FileCheck2, color: "text-violet-600 bg-violet-50" },
-  { name: "Inji Verify", role: "Verifier · Phase 1", desc: "Checks the credential, then a Verana add-on shows whether the issuer is accredited.", icon: BadgeCheck, color: "text-emerald-600 bg-emerald-50" },
-  { name: "Inji Web wallet", role: "Holder · Phase 2", desc: "Holds the credential and checks the verifier before presenting.", icon: Wallet, color: "text-blue-600 bg-blue-50" },
-  { name: "eSignet", role: "Auth server", desc: "OIDC authorization for the wallet's credential download.", icon: KeyRound, color: "text-slate-600 bg-slate-100" },
-  { name: "Verana Trust Resolver", role: "Trust layer", desc: "Answers, on-chain: is this party trusted, and authorized for this credential?", icon: Network, color: "text-purple-600 bg-purple-50" },
-];
+import {
+  ECOSYSTEM,
+  ECOSYSTEM_URL,
+  ORG,
+  ISSUER,
+  VERIFIER,
+  INJI_VERIFY_UI,
+  INJI_WEB,
+  VISUALIZER,
+} from "./config";
 
 const phase3 = [
-  { icon: BadgeCheck, title: "Delegated accreditation", desc: "A grantor accredits a second issuer with no transaction from the ecosystem root — it still resolves as authorized." },
-  { icon: Coins, title: "Fees & deposits", desc: "Issuance/verification fees and trust deposits are collected on-chain via permission sessions." },
-  { icon: Ban, title: "Revocation", desc: "Permissions can be revoked on-chain, and slashing backs the trust guarantees with real accountability." },
-  { icon: Boxes, title: "Multiple ecosystems", desc: "A second trust registry coexists on the same network, each resolving under its own ecosystem." },
+  { icon: BadgeCheck, title: "Delegated accreditation", desc: "A grantor can accredit a second issuer with no transaction from the ecosystem root, and it still resolves as authorized. The tree simply grows another branch." },
+  { icon: Coins, title: "Fees & deposits", desc: "Issuance and verification can be metered with on-chain fees and trust deposits, collected automatically through permission sessions." },
+  { icon: Ban, title: "Revocation & slashing", desc: "Any permission can be revoked on-chain, and slashing backs the trust guarantees with real, economic accountability." },
+  { icon: Boxes, title: "Multiple ecosystems", desc: "A second trust registry can run on the same network, each with its own root, schema and accredited parties, fully isolated." },
 ];
 
 export default function PlaygroundPage() {
@@ -45,141 +46,249 @@ export default function PlaygroundPage() {
         <div className="max-w-4xl mx-auto px-6 pt-14 pb-16 text-center">
           <img src="/mosip-x-verana.png" alt="MOSIP × Verana" className="h-16 mx-auto mb-6" />
           <p className="text-violet-500 text-sm font-semibold tracking-wider uppercase mb-3">
-            Inji × Verana trust integration
+            The trust layer for MOSIP Inji
           </p>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
-            Verifiable trust, end to end
+            Make every Inji credential prove itself
           </h1>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-8">
-            Watch a MOSIP Inji credential get issued, verified and presented, with the Verana Trust
-            Network proving who is <em>accredited</em> at every step. A valid signature is authenticity;
-            this adds legitimacy.
+            Your Inji stack already issues a Resident ID and checks its signature. But a signature only proves
+            the data wasn&apos;t changed, not that the issuer is a real, accredited authority, or that the
+            verifier asking for it is even allowed to. <strong className="text-gray-700">Verana adds that
+            missing layer, on-chain.</strong> Follow Asha&apos;s Resident ID through the whole chain and watch
+            every party prove itself, live and fail-closed.
           </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <a href="#check" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors">
-              Check trust live <ArrowDown className="w-4 h-4" />
-            </a>
-            <a href={INJI_VERIFY_UI} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors">
-              Open Inji Verify <ArrowUpRight className="w-4 h-4" />
-            </a>
-          </div>
+          <a href="#big-picture" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors">
+            See the big picture <ArrowDown className="w-4 h-4" />
+          </a>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-16 space-y-24">
-        {/* 1 — concepts */}
-        <section id="concepts">
-          <SectionHeading number={1} title="The trust gap" subtitle="Why a valid signature is not enough" />
+        {/* 1, the gap */}
+        <section id="gap">
+          <SectionHeading number={1} title="What a signature can't tell you" subtitle="The gap Verana fills, on top of what Inji already does" />
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            You already produce signed credentials, and Inji Verify already checks those signatures. That proves
+            the data is intact and came from the holder of a given key. It says <strong>nothing</strong> about
+            whether the issuer behind that key is a real, accredited authority, or whether the verifier
+            requesting Asha&apos;s ID is one she should trust. That gap is where fraud and over-collection live:
+            a perfectly valid signature from an issuer nobody vetted, or an over-asking verifier with no right to
+            the data.
+          </p>
           <p className="text-gray-600 mb-8 leading-relaxed">
-            A signed credential proves it wasn&apos;t tampered with. It does <strong>not</strong> tell you
-            whether the issuer is a real, accredited authority, or whether the verifier asking for your data
-            is one you should trust. Verana closes that gap.
+            Verana closes it by putting the answer <strong>on-chain</strong>. Every participant, issuer,
+            verifier and ecosystem, is a Decentralized Identifier registered in a trust registry, and given an
+            explicit permission for one credential type. At any step, anyone can ask the Verana Trust Resolver
+            &quot;is this party actually trusted, and authorized for this exact credential?&quot; and get a{" "}
+            <strong>fail-closed</strong> answer in one call. These are the four ideas the rest of the story uses.
           </p>
           <div className="grid sm:grid-cols-2 gap-4">
-            <ConceptCard icon={Fingerprint} title="Verifiable Credential" description="A tamper-proof digital claim — here, a Foundational Resident ID issued by MOSIP Inji Certify." color="violet" />
-            <ConceptCard icon={KeyRound} title="Decentralized Identifier (DID)" description="A self-owned identifier for each party — the issuer, the verifier, the ecosystem — that the resolver evaluates." color="blue" />
-            <ConceptCard icon={ScrollText} title="Trust Registry" description="The on-chain record of who may issue or verify what, under an ecosystem. Here: the MOSIP Pilot Authority's registry." color="amber" />
-            <ConceptCard icon={ShieldCheck} title="Accreditation" description="An issuer/verifier is accredited for a specific credential type — and it can be delegated, metered, and revoked." color="purple" />
+            <ConceptCard icon={Fingerprint} title="Verifiable Credential" description="A tamper-proof claim, here Asha's Foundational Resident ID, issued by MOSIP Inji Certify and signed under a key the issuer controls." color="violet" />
+            <ConceptCard icon={KeyRound} title="Decentralized Identifier (DID)" description="A self-owned identifier for each party, the ecosystem, the issuer, the verifier, that the resolver looks up and evaluates against the chain." color="blue" />
+            <ConceptCard icon={ScrollText} title="Trust Registry" description="The on-chain record of who may issue or verify what, under one ecosystem. Here: the MOSIP Pilot Authority's registry, #167." color="amber" />
+            <ConceptCard icon={ShieldCheck} title="Accreditation (permission)" description="The piece Verana adds: an on-chain permission to act as issuer or verifier for one schema. It can be delegated, metered, and revoked." color="purple" />
           </div>
         </section>
 
-        {/* 2 — ecosystem */}
-        <section id="ecosystem">
-          <SectionHeading number={2} title="The MOSIP Pilot Authority ecosystem" subtitle="One trust anchor, the official Inji components, a thin Verana layer" />
+        {/* 2, the big picture (two diagrams) */}
+        <section id="big-picture">
+          <SectionHeading number={2} title="The whole structure, two ways" subtitle="The flow you tell a room, and the on-chain tree an engineer queries" />
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            The <strong>MOSIP Pilot Authority</strong> anchors everything. It defines what a Resident ID is, and
+            it accredits exactly who may issue and verify it. Asha&apos;s credential chains all the way back to
+            that anchor, and Verana lets anyone confirm every link. First the flow, the story in one picture:
+          </p>
+          <TrustDiagram />
+          <p className="text-gray-600 mt-10 mb-6 leading-relaxed">
+            That same trust is recorded precisely on-chain as a <strong>permission tree</strong>. This is the
+            exact structure a MOSIP engineer would query: each box is a real permission under the schema, with
+            its <span className="font-mono text-sm">permissionType</span> and DID, and every edge is one party
+            having <em>granted</em> the next a permission. Because our schema requires accreditation
+            (ECOSYSTEM mode), the root grants the issuer and verifier <strong>directly</strong>, no intermediary
+            grantors. The three services resolve live below:
+          </p>
+          <PermissionTree />
+          <p className="text-gray-500 text-sm mt-6 leading-relaxed">
+            Now let&apos;s build that tree up, one move at a time, and after each move the page asks the real
+            resolver to prove it. Green means the link holds.
+          </p>
+        </section>
+
+        {/* 3, move 1: the anchor */}
+        <section id="anchor">
+          <SectionHeading number={3} title="Move 1, the trust anchor" subtitle="Asha's ID has to chain back to someone you already trust" />
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            First there is the <strong>{ECOSYSTEM.name}</strong>. It registers on the Verana network, creates a{" "}
+            <strong>trust registry</strong> (#{ECOSYSTEM.trustRegistry}), and owns the schema and the governance
+            framework. It sits at the root of the permission tree as the <span className="font-mono text-sm">ECOSYSTEM</span>{" "}
+            node. Every credential in this ecosystem, including Asha&apos;s, chains back to it.
+          </p>
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            The <strong>real condition</strong>: the anchor doesn&apos;t get to declare itself trusted. It must
+            resolve as a <strong>TRUSTED</strong> Verifiable Service, and that holds only because it carries two
+            verified credentials from Verana&apos;s own credential service, an Organization credential and a
+            Service credential, presented from its DID document. The resolver&apos;s{" "}
+            <span className="font-mono text-sm">Q1 (resolve)</span> walks that and returns{" "}
+            <span className="font-mono text-sm">trustStatus: TRUSTED</span>. Ask it yourself:
+          </p>
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm mb-6 grid sm:grid-cols-3 gap-4 text-sm">
             <div><dt className="text-gray-400">Trust registry</dt><dd className="font-semibold text-gray-900">#{ECOSYSTEM.trustRegistry}</dd></div>
             <div><dt className="text-gray-400">Credential schema</dt><dd className="font-semibold text-gray-900">{ECOSYSTEM.schema} (#{ECOSYSTEM.schemaId})</dd></div>
             <div><dt className="text-gray-400">Network</dt><dd className="font-semibold text-gray-900">{ECOSYSTEM.network}</dd></div>
           </div>
-          <div className="space-y-3">
-            {components.map((c) => (
-              <div key={c.name} className="flex items-start gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${c.color}`}>
-                  <c.icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-semibold text-gray-900">{c.name}</span>
-                    <span className="text-xs text-gray-400 font-medium">{c.role}</span>
-                  </div>
-                  <p className="text-sm text-gray-500 mt-0.5">{c.desc}</p>
-                </div>
-              </div>
-            ))}
+          <TrustCard entity={ORG} />
+        </section>
+
+        {/* 4, move 2: the schema */}
+        <section id="schema">
+          <SectionHeading number={4} title="Move 2, the credential schema" subtitle="Define exactly what a Resident ID is, before issuing one" />
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            Before Asha can be issued anything, the ecosystem publishes <strong>what</strong> a Foundational
+            Resident ID is: the exact claims it carries, recorded on-chain as a credential schema. Every
+            credential issued here must conform to it, and its <span className="font-mono text-sm">credentialSchema</span>{" "}
+            field <strong>points back to it</strong>. That pointer is what lets a verifier, later, confirm two
+            things at once: that Asha&apos;s credential is the right <em>kind</em>, and that it was issued under
+            the right registry.
+          </p>
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            One detail that matters for the whole demo: this schema is in <strong>ECOSYSTEM permission mode</strong>,
+            which means an issuer cannot simply self-register, it must be explicitly accredited by the root.
+            (An <span className="font-mono text-sm">OPEN</span> schema would let anyone issue, which is exactly
+            the trust gap we are closing.) Here is the live schema, loaded straight from the chain:
+          </p>
+          <SchemaCard />
+        </section>
+
+        {/* 5, move 3: the accredited issuer */}
+        <section id="issuer">
+          <SectionHeading number={5} title="Move 3, an accredited issuer" subtitle="Running Inji Certify isn't the same as being allowed to issue" />
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            Now a real <strong>MOSIP Inji Certify</strong> deployment joins as the issuer that will mint
+            Asha&apos;s ID, the <span className="font-mono text-sm">ISSUER</span> node in the tree. But running
+            Inji Certify is not enough to be believed. A verifier needs two separate things to be true, and the
+            resolver checks both in one go:
+          </p>
+          <ul className="text-gray-600 mb-4 leading-relaxed space-y-3 list-none">
+            <li className="flex gap-3">
+              <span className="font-mono text-xs mt-1 text-violet-600 shrink-0">Q1</span>
+              <span>
+                <strong>It is a trusted Verifiable Service.</strong> Inji Certify was made verifiable by adding
+                a <strong>service credential</strong> to its DID document, a holder-signed Verifiable
+                Presentation that chains back to the anchor. Open the <strong>DID document</strong> on the card
+                below to see the added credential and the service identity, this is the &quot;add a service
+                credential&quot; step made concrete.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-xs mt-1 text-violet-600 shrink-0">Q2</span>
+              <span>
+                <strong>It holds an issuer permission.</strong> The ecosystem granted it an on-chain
+                accreditation to act as <em>issuer</em> for this exact schema, the edge from{" "}
+                <span className="font-mono text-sm">ECOSYSTEM</span> to <span className="font-mono text-sm">ISSUER</span>{" "}
+                in the tree. Without it, even a trusted service resolves as &quot;trusted, but not accredited for
+                this credential&quot;, fail closed.
+              </span>
+            </li>
+          </ul>
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            Green here means both are true at once: <span className="font-mono text-sm">trustStatus: TRUSTED</span>{" "}
+            and <span className="font-mono text-sm">authorized: true</span>. That is precisely what
+            &quot;accredited issuer&quot; means, and it is the thing a bare signature can never tell you.
+          </p>
+          <TrustCard entity={ISSUER} />
+        </section>
+
+        {/* 6, move 4: issue */}
+        <section id="issue">
+          <SectionHeading number={6} title="Move 4, issue Asha's credential" subtitle="Now the accredited issuer can do its job" />
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            With Inji Certify trusted and accredited, it issues Asha a real Foundational Resident ID over
+            OID4VCI. The credential is signed, carries her claims (name, date of birth, identifier), and embeds
+            the <span className="font-mono text-sm">credentialSchema</span> pointer from Move 2, so any verifier
+            can check both the signature <em>and</em> the accreditation behind it. The moment it lands in her
+            wallet, Asha becomes the <span className="font-mono text-sm">HOLDER</span> leaf of the tree. Pick a
+            resident and issue one:
+          </p>
+          <IssueButton />
+        </section>
+
+        {/* 7, move 5: the verifier */}
+        <section id="verifier">
+          <SectionHeading number={7} title="Move 5, a verifier Asha can trust back" subtitle="Trust runs both ways" />
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            A credential is only half the story. When someone asks Asha to present her ID, she should be able to
+            ask back: <strong>who are you, and are you even allowed to request this?</strong> So the verifier
+            (<strong>Inji Verify</strong>) is checked too. It needs its own <strong>verifier permission</strong>{" "}
+            on the schema, the <span className="font-mono text-sm">ECOSYSTEM</span> to{" "}
+            <span className="font-mono text-sm">VERIFIER</span> edge in the tree, which the resolver answers as{" "}
+            <span className="font-mono text-sm">Q3</span>. An unknown or over-asking verifier resolves as
+            untrusted, and the wallet defaults to blocking it before any attribute leaves Asha&apos;s device.
+          </p>
+          <TrustCard entity={VERIFIER} />
+          <div className="mt-6 rounded-xl bg-violet-50 border border-violet-200 p-4">
+            <p className="text-sm text-violet-800">
+              This is holder protection in action. The hosted{" "}
+              <a href={INJI_WEB} target="_blank" rel="noopener noreferrer" className="font-medium underline">
+                Inji Web wallet
+              </a>{" "}
+              runs exactly this check over OpenID4VP before presenting, so trust is confirmed <em>before</em>{" "}
+              data is shared, not after.
+            </p>
           </div>
         </section>
 
-        {/* 3 — live verdict widget (centerpiece) */}
-        <section id="check">
-          <SectionHeading number={3} title="Check trust live" subtitle="Ask the resolver yourself — no curl required" />
+        {/* 8, real tools */}
+        <section id="tools">
+          <SectionHeading number={8} title="It's not a mock, it's your tools" subtitle="The same checks, inside official MOSIP Inji" />
           <p className="text-gray-600 mb-6 leading-relaxed">
-            Pick a party below. The page queries the live <strong>Verana Trust Resolver</strong> in your
-            browser — <span className="font-mono text-sm">resolve</span> (is it trusted?) and{" "}
-            <span className="font-mono text-sm">issuer/verifier-authorization</span> (is it accredited for this
-            credential?) — and renders the verdict. This is the same check Inji Verify and the wallet make.
-          </p>
-          <ResolverVerdict />
-        </section>
-
-        {/* 4 — phase 0/1 */}
-        <section id="issue-verify">
-          <SectionHeading number={4} title="Issue & verify a Resident ID" subtitle="Phases 0 and 1 — the credential, and the trust verdict on top" />
-          <p className="text-gray-600 mb-6 leading-relaxed">
-            Inji Certify issues the Foundational Resident ID; Inji Verify confirms the signature. The Verana
-            add-on then adds the verdict that matters: <strong>who issued it, and are they accredited?</strong>
+            Nothing here re-implements Inji. Inji Verify runs the real verification; a thin Verana add-on then
+            shows the accreditation verdict on top. Upload one of these sample QRs on the live{" "}
+            <a href={INJI_VERIFY_UI} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">Inji Verify UI</a>{" "}
+            and watch the verdict change with the real conditions:
           </p>
           <div className="grid md:grid-cols-2 gap-6 items-start">
             <a href={INJI_VERIFY_UI} target="_blank" rel="noopener noreferrer" className="block rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
               <img src="/verify-trust-panel.png" alt="Inji Verify showing the Verana Accredited issuer panel" className="w-full" />
             </a>
-            <div>
-              <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                Try it on the live <a href={INJI_VERIFY_UI} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">Inji Verify UI</a> — upload one of these sample QRs and watch the verdict change:
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { f: "valid-resident-id", label: "Accredited issuer", tone: "text-emerald-700" },
-                  { f: "self-signed", label: "Untrusted issuer", tone: "text-rose-700" },
-                  { f: "wrong-schema", label: "Not accredited here", tone: "text-amber-700" },
-                  { f: "tampered", label: "Invalid signature", tone: "text-gray-500" },
-                ].map((q) => (
-                  <div key={q.f} className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
-                    <img src={`/qrs/${q.f}.png`} alt={`${q.label} — sample QR`} className="w-full rounded-md mb-2" />
-                    <span className={`text-xs font-medium ${q.tone}`}>{q.label}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { f: "valid-resident-id", label: "Accredited issuer", tone: "text-emerald-700" },
+                { f: "self-signed", label: "Untrusted issuer", tone: "text-rose-700" },
+                { f: "wrong-schema", label: "Not accredited here", tone: "text-amber-700" },
+                { f: "tampered", label: "Invalid signature", tone: "text-gray-500" },
+              ].map((q) => (
+                <div key={q.f} className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
+                  <img src={`/qrs/${q.f}.png`} alt={`${q.label}, sample QR`} className="w-full rounded-md mb-2" />
+                  <span className={`text-xs font-medium ${q.tone}`}>{q.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 5 — phase 2 */}
-        <section id="holder">
-          <SectionHeading number={5} title="Protect the holder" subtitle="Phase 2 — verify the verifier, before anything is shared" />
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-blue-600 bg-blue-50">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Before the hosted Inji Web wallet presents a credential over OpenID4VP, it asks Verana whether the{" "}
-                  <strong>relying party</strong> is a trusted, authorized verifier (the <em>Verifier</em> check in
-                  the widget above). The wallet shows the holder <strong>who is asking</strong> and{" "}
-                  <strong>defaults to blocking</strong> unknown or over-asking verifiers — so trust is checked
-                  before any attribute leaves the device, not after.
-                </p>
-                <a href={INJI_WEB} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors">
-                  Open the Inji Web wallet <ArrowUpRight className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-          </div>
+        {/* 9, bonus explorer */}
+        <section id="explore">
+          <SectionHeading number={9} title="Check any party yourself" subtitle="The same resolver, on demand, including the counter-example" />
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            Every card above used this exact query. Here you can drive it: pick a party and the page asks the
+            live <strong>Verana Trust Resolver</strong> in your browser, including a self-signed issuer that
+            should fail. A valid signature is authenticity; this is legitimacy.
+          </p>
+          <ResolverVerdict />
         </section>
 
-        {/* 6 — phase 3 */}
+        {/* 10, governance */}
         <section id="governance">
-          <SectionHeading number={6} title="Governance & economics" subtitle="Phase 3 — a network that scales and stays accountable" />
+          <SectionHeading number={10} title="Governance & economics, at scale" subtitle="What keeps the network honest as it grows" />
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            The permission tree is not just a diagram, it is enforced and economically backed. Accreditation can
+            be delegated through grantor branches, metered with fees and deposits, and revoked, with slashing
+            behind the guarantees. You can watch the whole ecosystem on the{" "}
+            <a href={VISUALIZER} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">Verana network visualizer</a>{" "}
+            or open it in the{" "}
+            <a href={ECOSYSTEM_URL} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline">trust registry explorer</a>.
+          </p>
           <div className="grid sm:grid-cols-2 gap-4">
             {phase3.map((p) => (
               <div key={p.title} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm flex gap-4">
@@ -193,27 +302,30 @@ export default function PlaygroundPage() {
           </div>
         </section>
 
-        {/* 7 — recap */}
+        {/* 11, recap */}
         <section id="recap">
-          <SectionHeading number={7} title="The whole point" subtitle="Authenticity is not legitimacy" />
+          <SectionHeading number={11} title="The whole point" subtitle="Authenticity is not legitimacy" />
           <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-violet-50 to-white p-6 shadow-sm">
             <p className="text-gray-600 leading-relaxed mb-4">
-              At every step — issue, verify, present, govern — a participant can ask the chain whether the
-              other party is actually trusted and authorized, and gets a <strong>fail-closed</strong> answer.
-              Official MOSIP Inji components, a thin Verana trust layer, no forks.
+              We followed Asha&apos;s credential from nothing: an anchor that&apos;s trusted, a schema everyone
+              agrees on, an issuer that earned the right to issue, the credential itself, and a verifier she can
+              trust back. Every box in the permission tree resolved green, live, on-chain. At each step the
+              chain answered whether the other party is actually trusted and authorized, and answered{" "}
+              <strong>fail-closed</strong>. Official MOSIP Inji components, a thin Verana trust layer on top, no
+              forks.
             </p>
             <div className="flex flex-wrap gap-3 text-sm">
+              <a href={ECOSYSTEM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-violet-600 hover:underline">This ecosystem in Verana <ArrowUpRight className="w-3.5 h-3.5" /></a>
+              <a href={VISUALIZER} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-violet-600 hover:underline">Network visualizer <ArrowUpRight className="w-3.5 h-3.5" /></a>
               <a href={INJI_VERIFY_UI} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-violet-600 hover:underline">Inji Verify <ArrowUpRight className="w-3.5 h-3.5" /></a>
               <a href="https://docs.verana.io" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-violet-600 hover:underline">Verana docs <ArrowUpRight className="w-3.5 h-3.5" /></a>
-              <a href="https://docs.inji.io" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-violet-600 hover:underline">MOSIP Inji docs <ArrowUpRight className="w-3.5 h-3.5" /></a>
-              <a href="https://github.com/verana-labs/mosip-playground" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-violet-600 hover:underline">Source & phase docs <ArrowUpRight className="w-3.5 h-3.5" /></a>
             </div>
           </div>
         </section>
       </main>
 
       <footer className="border-t border-gray-200 py-8 text-center text-sm text-gray-400">
-        <p>MOSIP × Verana — Inji trust integration · pilot on {ECOSYSTEM.network}</p>
+        <p>MOSIP × Verana, the Inji trust layer · pilot on {ECOSYSTEM.network}</p>
       </footer>
     </div>
   );
