@@ -58,9 +58,14 @@ export default function PlaygroundPage() {
             missing layer, on-chain.</strong> Follow Asha&apos;s Resident ID through the whole chain and watch
             every party prove itself, live and fail-closed.
           </p>
-          <a href="#big-picture" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors">
-            See the big picture <ArrowDown className="w-4 h-4" />
-          </a>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <a href="#big-picture" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors">
+              See the big picture <ArrowDown className="w-4 h-4" />
+            </a>
+            <a href={ECOSYSTEM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-violet-200 bg-white text-violet-700 font-medium hover:border-violet-300 hover:bg-violet-50 transition-colors">
+              View the ecosystem on Verana <ArrowUpRight className="w-4 h-4" />
+            </a>
+          </div>
         </div>
       </header>
 
@@ -91,27 +96,20 @@ export default function PlaygroundPage() {
           </div>
         </section>
 
-        {/* 2, the big picture (two diagrams) */}
+        {/* 2, the big picture (permission tree) */}
         <section id="big-picture">
-          <SectionHeading number={2} title="The whole structure, two ways" subtitle="The flow you tell a room, and the on-chain tree an engineer queries" />
+          <SectionHeading number={2} title="The big picture" subtitle="The whole trust structure, recorded on-chain" />
           <p className="text-gray-600 mb-6 leading-relaxed">
             The <strong>MOSIP Pilot Authority</strong> anchors everything. It defines what a Resident ID is, and
-            it accredits exactly who may issue and verify it. Asha&apos;s credential chains all the way back to
-            that anchor, and Verana lets anyone confirm every link. First the flow, the story in one picture:
-          </p>
-          <TrustDiagram />
-          <p className="text-gray-600 mt-10 mb-6 leading-relaxed">
-            That same trust is recorded precisely on-chain as a <strong>permission tree</strong>. This is the
-            exact structure a MOSIP engineer would query: each box is a real permission under the schema, with
-            its <span className="font-mono text-sm">permissionType</span> and DID, and every edge is one party
-            having <em>granted</em> the next a permission. Because our schema requires accreditation
-            (ECOSYSTEM mode), the root grants the issuer and verifier <strong>directly</strong>, no intermediary
-            grantors. The three services resolve live below:
+            it accredits exactly who may issue and verify it. This is the precise structure a MOSIP engineer would
+            query, each box a real permission with its <span className="font-mono text-sm">permissionType</span>{" "}
+            and DID, each edge one party having granted the next. The three services resolve live, so the picture
+            proves itself.
           </p>
           <PermissionTree />
           <p className="text-gray-500 text-sm mt-6 leading-relaxed">
-            Now let&apos;s build that tree up, one move at a time, and after each move the page asks the real
-            resolver to prove it. Green means the link holds.
+            Now let&apos;s build that up, one move at a time, and after each move the page asks the real resolver
+            to prove it. Green means the link holds. At the very end you&apos;ll see the same trust as one flow.
           </p>
         </section>
 
@@ -302,9 +300,20 @@ export default function PlaygroundPage() {
           </div>
         </section>
 
-        {/* 11, recap */}
+        {/* 11, the flow overview */}
+        <section id="the-flow">
+          <SectionHeading number={11} title="The same trust, as one flow" subtitle="Everything above, in a single picture" />
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            The same chain of trust you just built, end to end: the anchor defines the credential, accredits the
+            issuer and verifier, the issuer hands Asha her Resident ID, and any verifier checks it all the way back
+            to the root. Each <span className="text-emerald-600 font-medium">✓</span> is the resolver answering live.
+          </p>
+          <TrustDiagram />
+        </section>
+
+        {/* 12, recap */}
         <section id="recap">
-          <SectionHeading number={11} title="The whole point" subtitle="Authenticity is not legitimacy" />
+          <SectionHeading number={12} title="The whole point" subtitle="Authenticity is not legitimacy" />
           <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-violet-50 to-white p-6 shadow-sm">
             <p className="text-gray-600 leading-relaxed mb-4">
               We followed Asha&apos;s credential from nothing: an anchor that&apos;s trusted, a schema everyone
