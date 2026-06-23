@@ -1,0 +1,35 @@
+{
+  "clientId": "mosip-playground",
+  "clientName": "MOSIP × Verana Playground",
+  "publicKey": {
+    "kty": "RSA",
+    "n": "nLgNqNIsCYi1gFSneUM6KrshRkY0dqacDXaLP1rJZU_-3CkDWfaLq2Hugmss57co_z26cP5szmVmiI9D8Y5wRgTJaIyBk_n6QwODyehtZbVWJesS_sTCcFmCgaKua_WGEh1Z6Cy-1N-XXSNzkQ8gpyzi3BsWbzyGG3IckrxBgYw19MdyjwS4HjBJCu6PiwDL7x3I0kPvx214uITah4bZWhcjfM59uLDjxsZm_ydjIVttcrgjX987__m2_mAIljUJ8A5iZkBO3hQ4NtTpzPu7wC9aFlvK68MVA4Xq7dSTjsPvfIGVhXmbPZv7oJAuqLlwzQ6Z7waV4ZBSelg8neqtow",
+    "e": "AQAB",
+    "kid": "Mukau3E5O-al0_jyktxnEn6d8j9ysZ_grPLDiJa_dPM",
+    "alg": "RS256",
+    "use": "sig"
+  },
+  "relyingPartyId": "mosip-playground",
+  "userClaims": [
+    "name",
+    "birthdate",
+    "gender",
+    "address"
+  ],
+  "authContextRefs": [
+    "mosip:idp:acr:generated-code",
+    "mosip:idp:acr:static-code",
+    "mosip:idp:acr:knowledge",
+    "mosip:idp:acr:biometrics"
+  ],
+  "logoUri": "https://raw.githubusercontent.com/verana-labs/mosip-playground/main/inji-web-vs/public/cobrand.png",
+  "redirectUris": [
+    "http://localhost:3000/api/issue/callback"
+  ],
+  "grantTypes": [
+    "authorization_code"
+  ],
+  "clientAuthMethods": [
+    "private_key_jwt"
+  ]
+}
