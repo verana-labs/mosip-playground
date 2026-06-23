@@ -4,6 +4,7 @@ import { RESOLVER, type SubjectKind } from "../config";
 export type TrustResult = {
   trustStatus?: string;
   authorized?: boolean;
+  notFound?: boolean;
   error?: string;
 };
 
@@ -23,11 +24,14 @@ export const TONE: Record<Tone, { bar: string; chip: string; text: string }> = {
   unknown: { bar: "bg-gray-400", chip: "bg-gray-100 text-gray-600", text: "text-gray-600" },
 };
 
-// A non-2xx with a JSON body must not be read as a trust verdict, it has no
-// trustStatus, so it would render a confident "untrusted" instead of an honest
-// "resolver unreachable". Throw so the caller's rejection path shows the error.
+// A 404 is a definitive verdict from a reachable resolver ("no trust record for
+// this DID"), not an outage, so surface it distinctly. Any other non-2xx has no
+// trustStatus to read, so it stays an honest "resolver unreachable".
+class ResolverNotFound extends Error {}
+
 async function getJson(url: string, signal: AbortSignal): Promise<Record<string, unknown>> {
   const res = await fetch(url, { signal });
+  if (res.status === 404) throw new ResolverNotFound();
   if (!res.ok) throw new Error(`Resolver returned ${res.status}`);
   return res.json();
 }
@@ -39,23 +43,38 @@ export async function checkTrust(
   signal: AbortSignal,
 ): Promise<TrustResult> {
   const did = encodeURIComponent(opts.did);
-  const q1 = getJson(`${RESOLVER}/resolve?did=${did}`, signal);
 
-  if (opts.kind === "anchor" || !opts.vtjsc) {
-    const r1 = await q1;
-    return { trustStatus: r1?.trustStatus as string | undefined };
+  let r1: Record<string, unknown>;
+  try {
+    r1 = await getJson(`${RESOLVER}/resolve?did=${did}`, signal);
+  } catch (e) {
+    if (e instanceof ResolverNotFound) return { notFound: true };
+    throw e;
   }
+  const trustStatus = r1?.trustStatus as string | undefined;
+
+  if (opts.kind === "anchor" || !opts.vtjsc) return { trustStatus };
 
   const authPath = opts.kind === "issuer" ? "issuer-authorization" : "verifier-authorization";
   const vtjsc = encodeURIComponent(opts.vtjsc);
-  const [r1, r2] = await Promise.all([
-    q1,
-    getJson(`${RESOLVER}/${authPath}?did=${did}&vtjscId=${vtjsc}`, signal),
-  ]);
-  return { trustStatus: r1?.trustStatus as string | undefined, authorized: r2?.authorized === true };
+  try {
+    const r2 = await getJson(`${RESOLVER}/${authPath}?did=${did}&vtjscId=${vtjsc}`, signal);
+    return { trustStatus, authorized: r2?.authorized === true };
+  } catch (e) {
+    if (e instanceof ResolverNotFound) return { trustStatus, authorized: false };
+    throw e;
+  }
 }
 
 export function verdictFor(kind: SubjectKind, r: TrustResult): Verdict {
+  if (r.notFound)
+    return {
+      tone: "bad",
+      title: kind === "anchor" ? "Untrusted" : kind === "issuer" ? "Untrusted issuer" : "Untrusted verifier",
+      detail:
+        "The Verana Trust Resolver has no trust record for this DID. It is unknown to the network, so it cannot be trusted. A valid signature proves authenticity, not legitimacy.",
+      Icon: ShieldX,
+    };
   if (r.error)
     return { tone: "unknown", title: "Resolver unreachable", detail: r.error, Icon: ShieldAlert };
 

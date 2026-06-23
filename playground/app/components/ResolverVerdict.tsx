@@ -98,13 +98,19 @@ export default function ResolverVerdict() {
                   <dd className="font-mono text-gray-700 break-all">{active.did}</dd>
                   <dt className="text-gray-400">Q1 · resolve</dt>
                   <dd className="text-gray-700">
-                    trustStatus: <span className="font-medium">{result?.trustStatus ?? ", "}</span>
+                    trustStatus:{" "}
+                    <span className="font-medium">
+                      {result?.notFound ? "not found" : result?.trustStatus ?? "n/a"}
+                    </span>
                   </dd>
                   <dt className="text-gray-400">
                     {active.kind === "issuer" ? "Q2 · issuer-auth" : "Q3 · verifier-auth"}
                   </dt>
                   <dd className="text-gray-700">
-                    authorized: <span className="font-medium">{String(result?.authorized ?? ", ")}</span>
+                    authorized:{" "}
+                    <span className="font-medium">
+                      {result?.notFound ? "no record" : String(result?.authorized ?? "n/a")}
+                    </span>
                   </dd>
                 </dl>
               </>
