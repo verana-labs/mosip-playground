@@ -1,0 +1,75 @@
+name: 13_ Build Inji Wallet (Android, Verana testnet)
+
+# Builds the MOSIP Inji Wallet Android app pointed at our Verana testnet stack
+# (our mimoto + eSignet), so it downloads the same Foundational Resident ID our
+# Inji Web wallet uses. Produces a sideloadable debug APK as an artifact, no
+# Android Studio needed. Run manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      inji_wallet_ref:
+        description: mosip/inji-wallet git ref to build
+        default: v0.22.1
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout inji-wallet
+        uses: actions/checkout@v4
+        with:
+          repository: mosip/inji-wallet
+          ref: ${{ inputs.inji_wallet_ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK + SDK packages
+        run: sdkmanager "ndk;21.4.7075529" "build-tools;35.0.0" "platforms;android-35"
+
+      - name: Point the app at the Verana testnet stack
+        run: |
+          cat > .env <<'EOF'
+          MIMOTO_HOST=https://inji-web.mosip.testnet.verana.network
+          ESIGNET_HOST=https://esignet-vs.mosip.testnet.verana.network
+          APPLICATION_THEME=gradient
+          CREDENTIAL_REGISTRY_EDIT=true
+          DEBUG_MODE=true
+          LIVENESS_DETECTION=false
+          GOOGLE_ANDROID_CLIENT_ID=
+          EOF
+
+      - name: Raise Gradle heap (RN + Hermes are memory-hungry)
+        run: echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m" >> android/gradle.properties
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Jetify
+        run: npx jetify
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleResidentappDebug --no-daemon --stacktrace
+        env:
+          DEBUG_KEYSTORE_ALIAS: androiddebugkey
+          DEBUG_KEYSTORE_PASSWORD: android
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: inji-wallet-verana-debug
+          path: android/app/build/outputs/apk/residentapp/debug/*.apk
+          retention-days: 14
+          if-no-files-found: error
