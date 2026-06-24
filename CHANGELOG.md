@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/verana-labs/mosip-playground/compare/v1.3.0...v1.4.0) (2026-06-24)
+
+
+### Features
+
+* [mosip] trust-story playground with live eSignet issuance for the MOSIP demo ([#28](https://github.com/verana-labs/mosip-playground/issues/28)) ([bf0bce5](https://github.com/verana-labs/mosip-playground/commit/bf0bce5cefb0b7fd7e378862463112b430c39713))
+
 ## [1.3.0](https://github.com/verana-labs/mosip-playground/compare/v1.2.0...v1.3.0) (2026-06-16)
 
 
