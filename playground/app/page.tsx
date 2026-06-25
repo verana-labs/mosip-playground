@@ -55,7 +55,7 @@ export default function PlaygroundPage() {
             Make every Inji credential prove itself
           </h1>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-8">
-            Your Inji stack already issues a Resident ID and checks its signature. But a signature only proves
+            MOSIP&apos;s Inji stack already issues a Resident ID and checks its signature. But a signature only proves
             the data wasn&apos;t changed, not that the issuer is a real, accredited authority, or that the
             verifier asking for it is even allowed to. <strong className="text-gray-700">Verana adds that
             missing layer, on-chain.</strong> Follow Asha&apos;s Resident ID through the whole chain and watch
@@ -77,7 +77,7 @@ export default function PlaygroundPage() {
         <section id="gap">
           <SectionHeading number={1} title="What a signature can't tell you" subtitle="The gap Verana fills, on top of what Inji already does" />
           <p className="text-gray-600 mb-4 leading-relaxed">
-            You already produce signed credentials, and Inji Verify already checks those signatures. That proves
+            Inji Certify already produces signed credentials, and Inji Verify already checks those signatures. That proves
             the data is intact and came from the holder of a given key. It says <strong>nothing</strong> about
             whether the issuer behind that key is a real, accredited authority, or whether the verifier
             requesting Asha&apos;s ID is one she should trust. That gap is where fraud and over-collection live:
@@ -277,7 +277,7 @@ export default function PlaygroundPage() {
 
         {/* 8, real tools */}
         <section id="tools">
-          <SectionHeading number={8} title="It's not a mock, it's your tools" subtitle="The same checks, inside official MOSIP Inji" />
+          <SectionHeading number={8} title="It's not a mock, it's the real tools" subtitle="The same checks, inside official MOSIP Inji" />
           <p className="text-gray-600 mb-6 leading-relaxed">
             Nothing here re-implements Inji. Inji Verify runs the real verification; a thin Verana add-on then
             shows the accreditation verdict on top. Upload one of these sample QRs on the live{" "}
