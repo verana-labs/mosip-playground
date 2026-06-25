@@ -12,6 +12,10 @@ on:
         description: mosip/inji-wallet git ref to build
         default: v0.22.1
         required: true
+      arm64_only:
+        description: build only arm64-v8a (fast iteration); leave false for a universal APK
+        default: 'false'
+        required: false
 
 jobs:
   build:
@@ -58,12 +62,14 @@ jobs:
           GOOGLE_ANDROID_CLIENT_ID=
           EOF
 
-      - name: Gradle props (heap + arm64-only for faster iteration)
+      - name: Gradle props (heap, + arm64-only when fast iteration is requested)
         run: |
           printf '\n' >> android/gradle.properties
           sed -i '/^org\.gradle\.jvmargs=/d;/^reactNativeArchitectures=/d' android/gradle.properties
           printf 'org.gradle.jvmargs=-Xmx4g\n' >> android/gradle.properties
-          printf 'reactNativeArchitectures=arm64-v8a\n' >> android/gradle.properties
+          if [ "${{ inputs.arm64_only }}" = "true" ]; then
+            printf 'reactNativeArchitectures=arm64-v8a\n' >> android/gradle.properties
+          fi
           echo "--- effective gradle.properties ---"
           cat android/gradle.properties
 
