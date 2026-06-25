@@ -7,6 +7,8 @@ export const VERANA_APP = "https://app.testnet.verana.network";
 export const INJI_VERIFY_UI = "https://inji-verify-ui.mosip.testnet.verana.network";
 export const INJI_WEB = "https://inji-web.mosip.testnet.verana.network";
 export const VISUALIZER = "https://vis.testnet.verana.network";
+export const INJI_WALLET_APK =
+  "https://github.com/verana-labs/mosip-playground/releases/download/inji-wallet-android/inji-wallet-verana.apk";
 
 export const ECOSYSTEM = {
   name: "MOSIP Pilot Authority",

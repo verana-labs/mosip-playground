@@ -11,6 +11,8 @@ import {
   Coins,
   Ban,
   Boxes,
+  Smartphone,
+  Download,
 } from "lucide-react";
 import SectionHeading from "./components/SectionHeading";
 import ConceptCard from "./components/ConceptCard";
@@ -28,6 +30,7 @@ import {
   VERIFIER,
   INJI_VERIFY_UI,
   INJI_WEB,
+  INJI_WALLET_APK,
   VISUALIZER,
 } from "./config";
 
@@ -209,6 +212,42 @@ export default function PlaygroundPage() {
             resident and issue one:
           </p>
           <IssueButton />
+
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Smartphone className="w-4 h-4 text-violet-500" />
+              <span className="font-semibold text-gray-900 text-sm">Or hold it in the real wallet, on your phone</span>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              The same credential, in the native MOSIP Inji Wallet on Android. Install it, sign in as a seeded
+              resident, and the Foundational Resident ID downloads from our Certify, the identical
+              Verana-trust-backed flow, on a real device.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-5 sm:items-center">
+              <a href={INJI_WALLET_APK} className="shrink-0 flex flex-col items-center gap-2">
+                <img
+                  src="/inji-wallet-qr.png"
+                  alt="QR to download the Inji Wallet APK"
+                  className="w-32 h-32 rounded-lg border border-gray-200 bg-white"
+                />
+                <span className="text-[11px] text-gray-400">scan to install on Android</span>
+              </a>
+              <div className="flex-1">
+                <a
+                  href={INJI_WALLET_APK}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
+                >
+                  <Download className="w-4 h-4" /> Download the Android APK
+                </a>
+                <ol className="mt-4 text-sm text-gray-500 space-y-1 list-decimal list-inside">
+                  <li>Install the APK, allow &quot;install from unknown sources&quot;</li>
+                  <li>Open Inji Wallet, set a passcode</li>
+                  <li>Add Credential, Foundational Resident ID</li>
+                  <li>UIN <span className="font-mono">7841223190</span>, OTP <span className="font-mono">111111</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* 7, move 5: the verifier */}
