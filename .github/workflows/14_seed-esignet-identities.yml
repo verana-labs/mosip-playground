@@ -13,7 +13,7 @@ jobs:
     name: Reseed Asha + Ravi into mock-identity-system
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up kubeconfig
         env:
@@ -24,7 +24,7 @@ jobs:
           chmod 600 ~/.kube/config
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
         with:
           version: 'v1.29.9'
 
