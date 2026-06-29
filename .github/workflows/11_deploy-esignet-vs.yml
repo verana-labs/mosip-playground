@@ -89,18 +89,13 @@ jobs:
             echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
           done
 
-      # The stack reset wipes registered OIDC clients with the DB — re-register EVERY
-      # client (playground + wallet-demo) each deploy, else only the wallet survives and
-      # the playground's mosip-playground client 404s with invalid_client_id. client-mgmt
-      # is csrf-exempt and unprotected under the bundled local profile (same as upstream
-      # compose); the payloads hold only PUBLIC keys.
+      # The stack reset wipes registered clients with the ephemeral DB — reseed all of
+      # them (not just wallet-demo, else mosip-playground stays unregistered).
       - name: Register OIDC clients (playground + wallet-demo)
         run: bash esignet-vs/scripts/register-clients.sh
 
-      # Regression guard for the VC scope: a pure credential scope must validate for BOTH
-      # clients the demo uses (wallet-demo = inji wallets, mosip-playground = showcase).
-      # /authorization/** requires CSRF; Spring Security 6 XOR tokens — the header must
-      # carry the token from the /csrf/token response BODY, not the raw cookie value.
+      # Regression guard: both clients must validate the VC scope. /authorization/**
+      # needs the CSRF token from the /csrf/token response BODY (Spring Security 6 XOR).
       - name: Smoke test (clients + resident_id_vc_ldp accepted)
         run: |
           BASE="https://esignet-vs.mosip.testnet.verana.network/v1/esignet"

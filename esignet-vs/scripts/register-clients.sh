@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
-# Re-register every eSignet OIDC client from esignet-vs/clients/*.json.
-#
-# eSignet's client store is an ephemeral postgres (emptyDir, no PVC — see
-# esignet-vs/manifest.yaml), so any postgres-esignet restart wipes all registered
-# clients and oauth-details then returns invalid_client_id for everything. The
-# deploy workflow seeds on deploy; run this to recover between deploys.
-#
-# client-mgmt is csrf-exempt and open under the bundled local profile. Idempotent:
-# POST creates a missing client, PUT updates one that already exists.
+# (Re)register every client in ../clients/*.json. eSignet's client store is ephemeral
+# (emptyDir), so a postgres restart drops them and oauth-details starts returning
+# invalid_client_id; rerun to restore. POST creates, PUT updates if it already exists.
 set -euo pipefail
 
 BASE="${ESIGNET_BASE:-https://esignet-vs.mosip.testnet.verana.network/v1/esignet}"
@@ -22,7 +16,6 @@ for f in "$DIR"/*.json; do
   resp=$(curl -s -X POST "$BASE/client-mgmt/oidc-client" -H 'Content-Type: application/json' -d "$body")
 
   if ! echo "$resp" | jq -e '(.errors // []) | length == 0' >/dev/null 2>&1; then
-    # Create rejected (usually duplicate_client) -> update the existing client in place.
     put=$(jq -n --arg t "$now" --slurpfile c "$f" '{
       requestTime: $t,
       request: {
