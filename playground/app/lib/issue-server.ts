@@ -16,6 +16,13 @@ export const SCOPE = "resident_id_vc_ldp";
 export const ACR = "mosip:idp:acr:generated-code";
 export const CALLBACK_PATH = "/api/issue/callback";
 
+// Behind the hosted ingress, req.nextUrl.origin resolves to the internal bind address
+// (0.0.0.0:3000), which would send eSignet an unreachable redirect_uri. Use an explicit
+// public origin when configured; local dev leaves it unset and uses the request origin.
+export function publicOrigin(requestOrigin: string): string {
+  return process.env.PLAYGROUND_PUBLIC_ORIGIN || requestOrigin;
+}
+
 // The dedicated playground OIDC client. The private key is server-only (.env.local),
 // never shipped to the browser. Fail fast if it is not configured.
 export function clientConfig() {

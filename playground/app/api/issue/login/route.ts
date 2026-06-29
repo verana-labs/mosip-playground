@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ESIGNET_AUTHORIZE, SCOPE, ACR, CALLBACK_PATH } from "../../../lib/issue-server";
+import { ESIGNET_AUTHORIZE, SCOPE, ACR, CALLBACK_PATH, publicOrigin } from "../../../lib/issue-server";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // A random state is stored in an httpOnly cookie and checked back in the callback.
 export async function GET(req: NextRequest) {
   const clientId = process.env.PLAYGROUND_OIDC_CLIENT_ID || "mosip-playground";
-  const redirectUri = `${req.nextUrl.origin}${CALLBACK_PATH}`;
+  const redirectUri = `${publicOrigin(req.nextUrl.origin)}${CALLBACK_PATH}`;
   const state = crypto.randomUUID();
 
   const params = new URLSearchParams({

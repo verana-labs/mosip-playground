@@ -7,6 +7,7 @@ import {
   clientAssertion,
   proofJwt,
   putIssued,
+  publicOrigin,
 } from "../../../lib/issue-server";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ function back(origin: string, params: Record<string, string>) {
 // OID4VCI proof, and hand the signed VC back to the page through a one-time store.
 // Upstream error detail is logged server-side only; the client gets an opaque code.
 export async function GET(req: NextRequest) {
-  const origin = req.nextUrl.origin;
+  const origin = publicOrigin(req.nextUrl.origin);
   const sp = req.nextUrl.searchParams;
 
   if (sp.get("error")) return back(origin, { issue_error: "login_failed" });
