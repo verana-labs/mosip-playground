@@ -89,32 +89,33 @@ jobs:
             echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
           done
 
-      # The stack reset wipes registered OIDC clients with the DB — re-register the wallet
-      # client every deploy. client-mgmt is csrf-exempt and unprotected under the bundled
-      # local profile (same as upstream compose); the payload holds only the PUBLIC key.
-      - name: Register wallet-demo OIDC client
-        run: |
-          BASE="https://esignet-vs.mosip.testnet.verana.network/v1/esignet"
-          NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-          BODY=$(jq -n --arg t "$NOW" --slurpfile r esignet-vs/clients/wallet-demo.json '{requestTime:$t, request:$r[0]}')
-          RESP=$(curl -sf -X POST "$BASE/client-mgmt/oidc-client" -H 'Content-Type: application/json' -d "$BODY")
-          echo "$RESP"
-          echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
+      # The stack reset wipes registered OIDC clients with the DB — re-register EVERY
+      # client (playground + wallet-demo) each deploy, else only the wallet survives and
+      # the playground's mosip-playground client 404s with invalid_client_id. client-mgmt
+      # is csrf-exempt and unprotected under the bundled local profile (same as upstream
+      # compose); the payloads hold only PUBLIC keys.
+      - name: Register OIDC clients (playground + wallet-demo)
+        run: bash esignet-vs/scripts/register-clients.sh
 
-      # Regression guard for the VC scope: a pure credential scope must validate.
+      # Regression guard for the VC scope: a pure credential scope must validate for BOTH
+      # clients the demo uses (wallet-demo = inji wallets, mosip-playground = showcase).
       # /authorization/** requires CSRF; Spring Security 6 XOR tokens — the header must
       # carry the token from the /csrf/token response BODY, not the raw cookie value.
-      - name: Smoke test (resident_id_vc_ldp accepted)
+      - name: Smoke test (clients + resident_id_vc_ldp accepted)
         run: |
           BASE="https://esignet-vs.mosip.testnet.verana.network/v1/esignet"
           CJ=$(mktemp)
           XSRF=$(curl -sf -c "$CJ" "$BASE/csrf/token" | jq -r .token)
-          NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-          RESP=$(curl -sf -b "$CJ" -H "X-XSRF-TOKEN: $XSRF" -X POST "$BASE/authorization/v2/oauth-details" \
-            -H 'Content-Type: application/json' \
-            -d "{\"requestTime\":\"$NOW\",\"request\":{\"clientId\":\"wallet-demo\",\"scope\":\"resident_id_vc_ldp\",\"responseType\":\"code\",\"redirectUri\":\"http://localhost:3004/redirect\",\"display\":\"page\",\"prompt\":\"consent\",\"acrValues\":\"mosip:idp:acr:generated-code\",\"nonce\":\"smoke\",\"state\":\"smoke\"}}")
-          echo "$RESP" | jq -c '{errors}'
-          echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
+          check () {
+            NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+            RESP=$(curl -sf -b "$CJ" -H "X-XSRF-TOKEN: $XSRF" -X POST "$BASE/authorization/v2/oauth-details" \
+              -H 'Content-Type: application/json' \
+              -d "{\"requestTime\":\"$NOW\",\"request\":{\"clientId\":\"$1\",\"scope\":\"resident_id_vc_ldp\",\"responseType\":\"code\",\"redirectUri\":\"$2\",\"display\":\"page\",\"prompt\":\"consent\",\"acrValues\":\"mosip:idp:acr:generated-code\",\"nonce\":\"smoke\",\"state\":\"smoke\"}}")
+            echo "$1 -> $(echo "$RESP" | jq -c '{errors}')"
+            echo "$RESP" | jq -e '(.errors // []) | length == 0' >/dev/null
+          }
+          check "wallet-demo" "http://localhost:3004/redirect"
+          check "mosip-playground" "https://playground.mosip.testnet.verana.network/api/issue/callback"
 
       - name: Debug on failure
         if: failure()

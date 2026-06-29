@@ -24,7 +24,10 @@
   ],
   "logoUri": "https://raw.githubusercontent.com/verana-labs/mosip-playground/main/inji-web-vs/public/cobrand.png",
   "redirectUris": [
-    "http://localhost:3000/api/issue/callback"
+    "https://playground.mosip.testnet.verana.network/api/issue/callback",
+    "http://localhost:3000/api/issue/callback",
+    "https://localhost:3000/api/issue/callback",
+    "https://0.0.0.0:3000/api/issue/callback"
   ],
   "grantTypes": [
     "authorization_code"
