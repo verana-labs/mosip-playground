@@ -26,8 +26,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # The showcase has no runtime config (the resolver is queried browser-side),
-      # so there are no build-args or env to inject.
+      # The trust story is queried browser-side, but live issuance runs server-side and
+      # needs the OIDC client key + a public origin; both are injected at deploy (below).
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -50,6 +50,22 @@ jobs:
         uses: azure/setup-kubectl@v4
         with:
           version: 'v1.29.9'
+
+      # The private JWK is the OIDC client's signing key — keep it in a k8s Secret and
+      # reference it by secretKeyRef below, never inline it in the manifest or logs.
+      - name: Create playground OIDC secret
+        env:
+          NS_SECRET: ${{ secrets.K8S_NAMESPACE }}
+          JWK: ${{ secrets.PLAYGROUND_OIDC_PRIVATE_JWK }}
+        run: |
+          NS="${NS_SECRET:-mosip}"
+          if [ -z "$JWK" ]; then
+            echo "::error::PLAYGROUND_OIDC_PRIVATE_JWK secret is empty — set it in Actions secrets" >&2
+            exit 1
+          fi
+          kubectl create secret generic playground-oidc -n "$NS" \
+            --from-literal=PLAYGROUND_OIDC_PRIVATE_JWK="$JWK" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy
         env:
@@ -87,6 +103,16 @@ jobs:
                     imagePullPolicy: Always
                     ports:
                       - containerPort: ${PORT}
+                    env:
+                      - name: PLAYGROUND_OIDC_CLIENT_ID
+                        value: "mosip-playground"
+                      - name: PLAYGROUND_PUBLIC_ORIGIN
+                        value: "https://${HOST}"
+                      - name: PLAYGROUND_OIDC_PRIVATE_JWK
+                        valueFrom:
+                          secretKeyRef:
+                            name: playground-oidc
+                            key: PLAYGROUND_OIDC_PRIVATE_JWK
                     readinessProbe:
                       httpGet:
                         path: /
