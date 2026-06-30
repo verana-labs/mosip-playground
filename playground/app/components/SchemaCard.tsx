@@ -50,7 +50,7 @@ export default function SchemaCard() {
         <div className="flex items-center gap-2">
           <Braces className="w-4 h-4 text-violet-500" />
           <span className="font-semibold text-gray-900 text-sm">{ECOSYSTEM.schema}</span>
-          <span className="text-xs text-gray-400">schema #{ECOSYSTEM.schemaId} · TR {ECOSYSTEM.trustRegistry}</span>
+          <span className="text-xs text-gray-400">schema #{ECOSYSTEM.schemaId} · Ecosystem {ECOSYSTEM.ecosystemId}</span>
         </div>
         {raw && (
           <button onClick={() => setOpen((o) => !o)} className="text-xs text-violet-600 hover:text-violet-800">

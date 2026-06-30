@@ -63,7 +63,7 @@ export default function TrustDiagram() {
         <Node
           icon={Building2}
           title="MOSIP Pilot Authority"
-          sub="The trust anchor · Trust Registry #167"
+          sub="The trust anchor · Ecosystem #167"
           badge="Trusted on the Verana network"
           accent="text-amber-300"
           delay={0}
