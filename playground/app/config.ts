@@ -14,7 +14,7 @@ export const ECOSYSTEM = {
   name: "MOSIP Pilot Authority",
   did: "did:webvh:QmUNEzd1z2TktGLNhQKYuhNp6ckq4xzetHD5oVdH2YD3PA:organization-vs.mosip.testnet.verana.network",
   host: "https://organization-vs.mosip.testnet.verana.network",
-  trustRegistry: 167,
+  ecosystemId: 167,
   schemaId: 241,
   schema: "Foundational Resident ID",
   network: "vna-testnet-1",
@@ -22,8 +22,8 @@ export const ECOSYSTEM = {
   vtjsc: "https://organization-vs.mosip.testnet.verana.network/vt/schemas-resident-id-jsc.json",
 };
 
-// Link to this ecosystem's trust registry on the Verana frontend
-export const ECOSYSTEM_URL = `${VERANA_APP}/tr/${ECOSYSTEM.trustRegistry}`;
+// Link to this Ecosystem on the Verana frontend
+export const ECOSYSTEM_URL = `${VERANA_APP}/tr/${ECOSYSTEM.ecosystemId}`;
 
 export type SubjectKind = "anchor" | "issuer" | "verifier";
 
