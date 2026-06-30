@@ -22,7 +22,7 @@ jobs:
 
       - name: Set up kubeconfig
         env:
-          KUBECONFIG_DATA: ${{ secrets.OVH_KUBECONFIG }}
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_VERANA_DEV }}
         run: |
           mkdir -p ~/.kube
           printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
