@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Validate branch and extract network
         run: |
@@ -89,11 +89,11 @@ jobs:
         run: |
           mkdir -p ~/.kube
           cat > ~/.kube/config <<'KUBEEOF'
-          ${{ secrets.OVH_KUBECONFIG }}
+          ${{ secrets.KUBECONFIG_VERANA_DEV }}
           KUBEEOF
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
         with:
           version: 'v1.29.9'
 
