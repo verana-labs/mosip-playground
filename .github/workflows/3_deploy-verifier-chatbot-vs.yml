@@ -79,7 +79,7 @@ jobs:
         run: |
           mkdir -p ~/.kube
           cat > ~/.kube/config <<'KUBEEOF'
-          ${{ secrets.OVH_KUBECONFIG }}
+          ${{ secrets.KUBECONFIG_VERANA_DEV }}
           KUBEEOF
 
       - name: Install kubectl
