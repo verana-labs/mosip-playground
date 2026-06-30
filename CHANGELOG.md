@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0](https://github.com/verana-labs/mosip-playground/compare/v1.4.0...v1.5.0) (2026-06-30)
+
+
+### Features
+
+* [mosip] add the inji mobile wallet to the playground + docs ([#20](https://github.com/verana-labs/mosip-playground/issues/20)) ([#36](https://github.com/verana-labs/mosip-playground/issues/36)) ([29b5c0f](https://github.com/verana-labs/mosip-playground/commit/29b5c0f5f0c51e8f4d51d191b80d810ccae0bfca))
+
+
+### Bug Fixes
+
+* [mosip] add non-destructive workflow to reseed wiped eSignet mock identities ([#41](https://github.com/verana-labs/mosip-playground/issues/41)) ([c148a94](https://github.com/verana-labs/mosip-playground/commit/c148a94868c47bde03ecea9bf69a09ee07883d8a))
+* [mosip] hosted issuance: public origin for redirect_uri + inject oidc signing key ([#40](https://github.com/verana-labs/mosip-playground/issues/40)) ([e75f770](https://github.com/verana-labs/mosip-playground/commit/e75f7703191d117af8083929031148ffc97defb7))
+* [mosip] reseed all esignet oidc clients so playground + wallet issuance survive restarts ([#39](https://github.com/verana-labs/mosip-playground/issues/39)) ([e02dbf7](https://github.com/verana-labs/mosip-playground/commit/e02dbf7bc9bb797b37cb997b9fafcd713995a586))
+
 ## [1.4.0](https://github.com/verana-labs/mosip-playground/compare/v1.3.0...v1.4.0) (2026-06-24)
 
 
