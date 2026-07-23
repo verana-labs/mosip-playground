@@ -45,7 +45,7 @@ below are read from that tag, not the `v0.10.1-dev` working HEAD.
 | Param | Value | Meaning |
 |---|---|---|
 | `td.trust_unit_price` | `1_000_000 uvna` = **1 VNA / trust unit** | fees + deposits are denominated in trust units |
-| `td.trust_deposit_rate` | `0.20` | fraction of a paid fee locked as the payer's trust deposit |
+| `td.trust_deposit_rate` | `0.05` | fraction of a paid fee locked as the payer's trust deposit |
 | `td.trust_deposit_reclaim_burn_rate` | `0.60` | burned when a trust deposit is reclaimed |
 | `td.trust_deposit_max_yield_rate` | `0.15` | cap on deposit yield |
 | `tr.trust_registry_trust_deposit` | `10` units | TR creation deposit (already paid) |

@@ -87,8 +87,8 @@ Economic commitments are denominated in **trust units** (on this network, one tr
 
 - **Trust deposits.** Creating a Trust Registry, a schema, and certain permissions requires locking a
   trust deposit, sized by on-chain parameters (`tr`, `cs`, `td` modules). A portion of every fee a
-  participant pays is added to that participant's trust deposit (the `trust_deposit_rate`, currently
-  20%). Deposits back the trust guarantees and are the value at risk under §9. Reclaiming a deposit
+  participant pays is added to that participant's trust deposit (the `trust_deposit_rate`, default
+  5%). Deposits back the trust guarantees and are the value at risk under §9. Reclaiming a deposit
   burns a fraction of it (`trust_deposit_reclaim_burn_rate`), discouraging churn; deposits may accrue a
   capped yield (`trust_deposit_max_yield_rate`).
 - **Fees.** A schema may carry a **validation fee** (paid by an applicant to its validator/grantor at
