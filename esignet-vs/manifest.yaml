@@ -8,11 +8,12 @@
 # NOTE: Postgres is EPHEMERAL on purpose (emptyDir, no PVC) — exactly like MOSIP's
 # official compose. The keymanager stores its master key in an in-container PKCS12
 # keystore while the alias lives in this DB; the two MUST share a lifecycle. Persisting
-# the DB but not the keystore caused "No such alias" crashloops on redeploy. Fresh DB +
-# fresh keystore each deploy keeps them in sync — workflow #11 enforces this by DELETING
-# esignet/mock-identity/postgres/redis before apply (a plain apply that replaces only the
-# esignet pod hits the same crashloop). Mock identities + the wallet-demo OIDC client are
-# reloaded post-deploy.
+# the DB but not the keystore caused "No such alias" crashloops on redeploy.
+# The esignet Deployment now keeps them in sync itself: an initContainer truncates
+# esignet.key_alias and esignet.key_store before every start, so a fresh keystore always
+# meets a fresh alias and a lone pod restart recovers on its own. Workflow #11 still
+# deletes esignet/mock-identity/postgres/redis before apply for a clean full redeploy, and
+# reloads the mock identities + the wallet-demo OIDC client afterwards.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -150,6 +151,31 @@ spec:
     metadata:
       labels: { app: esignet }
     spec:
+      # The keymanager's master key lives in a PKCS12 keystore on this container's ephemeral
+      # filesystem, so every pod start gets an empty one while esignet.key_alias still names the
+      # key of the previous pod: the keymanager then fails with "No such alias" and crashloops.
+      # Clearing the two key tables makes a fresh keystore pair with a fresh alias, so a pod
+      # restart is self-healing and does not need the full-stack redeploy of workflow #11.
+      # Only the keymanager's own rows go: OIDC clients, mock identities, key_policy_def and
+      # mock-identity-system's separate database are untouched.
+      initContainers:
+        - name: resync-keymanager-aliases
+          image: postgres:15
+          env:
+            - { name: PGPASSWORD, value: postgres }
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until pg_isready -h postgres-esignet -p 5432 -U postgres -d mosip_esignet -q; do
+                echo "waiting for postgres-esignet"; sleep 2
+              done
+              psql -h postgres-esignet -U postgres -d mosip_esignet -v ON_ERROR_STOP=1 \
+                -c 'TRUNCATE esignet.key_alias, esignet.key_store;'
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
       containers:
         - name: esignet
           image: mosipid/esignet-with-plugins:1.8.0
